@@ -1,11 +1,14 @@
 # Railway deployment — DOGE FORGE backend
 
-Three services, all from this repo, all with **Root Directory = `backend`**.
+Two services, both from this repo, both with **Root Directory = `backend`**.
+
+> Liquidity flushing is now **on-chain auto-flush** (triggered inside
+> `Miner.commit / harvest`). No keeper bot, no separate funded EOA.
 
 ## 1. Create the project
 
 1. railway.app → New Project → Deploy from GitHub repo → `dudelynft-dotcom/DF`.
-2. After the first service appears, rename it to `api` and add two more services from the same repo (`+ New` → GitHub Repo → same repo).
+2. After the first service appears, rename it to `api` and add one more service from the same repo (`+ New` → GitHub Repo → same repo). Rename it to `indexer`.
 
 ## 2. Per-service settings
 
@@ -15,13 +18,12 @@ For each service: **Settings → Root Directory → `backend`**. Then set the st
 | --------- | ------------------- | ---------------- |
 | `api`     | `npm run start`     | `web`            |
 | `indexer` | `npm run indexer`   | `indexer`        |
-| `keeper`  | `npm run keeper`    | `keeper`         |
 
-Build command on all three: leave blank (Railway runs `npm install` automatically).
+Build command on both: leave blank (Railway runs `npm install` automatically).
 
 ## 3. Shared environment variables
 
-Set on **all three** services (Settings → Variables):
+Set on **both** services (Settings → Variables):
 
 ```
 TEMPO_RPC_URL      https://rpc.testnet.tempo.xyz
@@ -47,15 +49,6 @@ INDEXER_RANGE      200
 INDEXER_START_BLOCK 0
 ```
 
-### `keeper` only
-
-```
-KEEPER_PRIVATE_KEY <private key of a fresh EOA — NOT your admin key>
-KEEPER_INTERVAL_MS 30000
-```
-
-Fund the keeper EOA with a small amount of pathUSD for gas. The keeper only calls permissionless functions (`flush()`, `seedLiquidity()`), so it needs no admin role.
-
 ## 4. Persistent volume (SQLite)
 
 The `api` and `indexer` share a SQLite file. Add a volume to **both**:
@@ -63,8 +56,6 @@ The `api` and `indexer` share a SQLite file. Add a volume to **both**:
 - Service → Volumes → Add Volume
 - Mount path: `/data`
 - Size: 1 GB
-
-The `keeper` does not touch the DB — no volume needed.
 
 ## 5. Wire the frontend
 
@@ -89,4 +80,27 @@ Logs (Railway → Service → Deployments → Logs):
 
 - `api` should show `listening on :4000`
 - `indexer` should show poll ticks every ~10s
-- `keeper` should show flush + seed attempts every 30s (skipped if `pendingLiquidity = 0`, which is normal)
+
+## 7. Auto-flush behavior
+
+Liquidity flushing happens automatically inside `Miner.sol` at the end of
+`commit`, `deposit`, `harvest`, and `harvestAll`. A flush fires when:
+
+- `pendingLiquidity ≥ autoFlushThreshold` (default: 100 pathUSD), **or**
+- `pendingLiquidity > 0` and at least `autoFlushIntervalSec` (default: 1h)
+  has passed since the last auto-flush.
+
+The seed call is wrapped in `try/catch` — if `LiquidityManager.seedLiquidity`
+ever reverts (e.g. mint budget exhausted), an `AutoFlushSeedFailed` event is
+emitted and the user's mining tx still succeeds.
+
+Admin can tune via:
+
+```
+Miner.setAutoFlushEnabled(bool)
+Miner.setAutoFlushThreshold(uint256)   // pathUSD-wei
+Miner.setAutoFlushIntervalSec(uint256) // seconds
+```
+
+The public `flush()` function still exists as a manual fallback — anyone can
+call it to force-process the backlog without paying for `seedLiquidity`.

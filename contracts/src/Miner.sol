@@ -9,6 +9,10 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 import {DOGE} from "./DOGE.sol";
 
+interface ILiquidityManagerSeed {
+    function seedLiquidity() external returns (uint256);
+}
+
 /// @title Miner — multi-position mining with per-position Harvest Mode
 /// @notice
 ///   Each `commit()` call opens a NEW position with its own chosen Harvest Mode
@@ -98,6 +102,17 @@ contract Miner is Ownable, ReentrancyGuard, Pausable {
     uint256 public pendingLiquidity;
     uint256 public pendingTreasury;
 
+    // ---- auto-flush (replaces the off-chain keeper) ----
+    /// @notice When true, user-facing writes (commit/harvest) auto-trigger a
+    ///         flush + seedLiquidity once thresholds are met.
+    bool    public autoFlushEnabled = true;
+    /// @notice Minimum pendingLiquidity (in pathUSD-wei) that triggers an auto-flush.
+    uint256 public autoFlushThreshold;
+    /// @notice Time (seconds) since the last auto-flush after which any non-zero
+    ///         pendingLiquidity will trigger a flush even if below threshold.
+    uint256 public autoFlushIntervalSec = 1 hours;
+    uint64  public lastAutoFlushAt;
+
     event Committed(address indexed user, uint256 indexed positionId, uint256 amount, uint8 mode, uint64 unlockAt);
     event Accrued(address indexed user, uint256 indexed positionId, uint256 flowed, uint256 dogeAdded, uint256 scoreDelta);
     event Harvested(address indexed user, uint256 indexed positionId, uint256 dogeMinted);
@@ -107,6 +122,7 @@ contract Miner is Ownable, ReentrancyGuard, Pausable {
         uint256 commitmentBps, uint256 modeBps, uint256 globalBps, uint256 adaptiveBps, uint256 effectiveBps
     );
     event Flushed(uint256 toLiquidity, uint256 toTreasury);
+    event AutoFlushSeedFailed(bytes reason);
     event ParamUpdated(bytes32 indexed key, uint256 value);
     event SinkUpdated(bytes32 indexed key, address value);
     event PhasesReplaced();
@@ -139,6 +155,7 @@ contract Miner is Ownable, ReentrancyGuard, Pausable {
         pathUSDUnit = 10 ** _pathUSDDecimals;
 
         perWalletCap = 10_000 * pathUSDUnit;
+        autoFlushThreshold = 100 * pathUSDUnit; // 100 pathUSD default
 
         phases.push(Phase({supplyThreshold:  10_000_000 ether, ratePerPathUSD: 200 ether}));
         phases.push(Phase({supplyThreshold:  70_000_000 ether, ratePerPathUSD: 100 ether}));
@@ -200,6 +217,7 @@ contract Miner is Ownable, ReentrancyGuard, Pausable {
         positionId = arr.length - 1;
 
         emit Committed(msg.sender, positionId, amount, mode, unlockAt);
+        _maybeAutoFlush();
     }
 
     /// @notice Alias for tools expecting `deposit(amount)`. Defaults to INSTANT mode.
@@ -239,6 +257,7 @@ contract Miner is Ownable, ReentrancyGuard, Pausable {
         }));
         uint256 positionId = arr.length - 1;
         emit Committed(user, positionId, amount, mode, unlockAt);
+        _maybeAutoFlush();
         return positionId;
     }
 
@@ -262,6 +281,7 @@ contract Miner is Ownable, ReentrancyGuard, Pausable {
             p.open = false;
             emit PositionClosed(msg.sender, positionId);
         }
+        _maybeAutoFlush();
     }
 
     /// @notice Claim every unlocked position's rewards in one tx.
@@ -286,6 +306,7 @@ contract Miner is Ownable, ReentrancyGuard, Pausable {
         }
         if (total == 0) revert NothingToHarvest();
         doge.mint(msg.sender, total);
+        _maybeAutoFlush();
     }
 
     // ============================================================
@@ -521,9 +542,64 @@ contract Miner is Ownable, ReentrancyGuard, Pausable {
         emit Flushed(sentLq, sentTz);
     }
 
+    /// @dev Internal auto-flush triggered at the end of user-facing writes.
+    ///      Wrapped so a `seedLiquidity` failure (e.g. budget exhausted) never
+    ///      bricks a user's mine/harvest. Skips silently if the conditions
+    ///      aren't met or auto-flush is paused.
+    function _maybeAutoFlush() internal {
+        if (!autoFlushEnabled) return;
+        uint256 lq = pendingLiquidity;
+        if (lq == 0) return;
+
+        bool meetsThreshold  = lq >= autoFlushThreshold;
+        bool intervalElapsed = block.timestamp >= uint256(lastAutoFlushAt) + autoFlushIntervalSec;
+        if (!meetsThreshold && !intervalElapsed) return;
+
+        address lm = liquidityManager;
+        address tz = treasury;
+        uint256 sentLq;
+        uint256 sentTz;
+
+        if (lm != address(0)) {
+            pendingLiquidity = 0;
+            pathUSD.safeTransfer(lm, lq);
+            sentLq = lq;
+        }
+        uint256 t = pendingTreasury;
+        if (t > 0 && tz != address(0)) {
+            pendingTreasury = 0;
+            pathUSD.safeTransfer(tz, t);
+            sentTz = t;
+        }
+        lastAutoFlushAt = uint64(block.timestamp);
+        emit Flushed(sentLq, sentTz);
+
+        if (sentLq > 0 && lm != address(0)) {
+            try ILiquidityManagerSeed(lm).seedLiquidity() returns (uint256) {
+                // success — pool grew
+            } catch (bytes memory reason) {
+                // Don't revert the user's tx; surface for off-chain alerting.
+                emit AutoFlushSeedFailed(reason);
+            }
+        }
+    }
+
     // ============================================================
     //                           ADMIN
     // ============================================================
+
+    function setAutoFlushEnabled(bool v) external onlyOwner {
+        autoFlushEnabled = v;
+        emit ParamUpdated("autoFlushEnabled", v ? 1 : 0);
+    }
+    function setAutoFlushThreshold(uint256 v) external onlyOwner {
+        autoFlushThreshold = v;
+        emit ParamUpdated("autoFlushThreshold", v);
+    }
+    function setAutoFlushIntervalSec(uint256 v) external onlyOwner {
+        autoFlushIntervalSec = v;
+        emit ParamUpdated("autoFlushIntervalSec", v);
+    }
 
     function setGlobalMultiplier(uint256 v) external onlyOwner { globalMultiplier = v; emit ParamUpdated("globalMultiplier", v); }
     function setPostCapRate(uint256 v)      external onlyOwner { postCapRatePerPathUSD = v; emit ParamUpdated("postCapRatePerPathUSD", v); }
