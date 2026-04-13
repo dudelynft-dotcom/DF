@@ -154,12 +154,15 @@ function Spinner() {
 }
 
 function displayName(c: Connector): string {
+  if (c.type === "walletConnect") return "WalletConnect";
+  if (c.type === "coinbaseWallet") return "Coinbase Wallet";
   if (c.name && c.name !== "Injected") return c.name;
   return "Browser wallet";
 }
 function subLabel(c: Connector): string {
+  if (c.type === "walletConnect") return "Scan with any mobile wallet";
+  if (c.type === "coinbaseWallet") return "Coinbase app or extension";
   if (c.type === "injected") return "Browser extension";
-  if (c.type === "walletConnect") return "Scan with a mobile wallet";
   return c.type;
 }
 
