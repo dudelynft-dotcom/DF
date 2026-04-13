@@ -155,7 +155,8 @@ export default function LeaderboardPage() {
 
       {/* Table */}
       <section className="rounded-xl border border-line bg-bg-surface overflow-hidden">
-        <div className="grid grid-cols-12 gap-2 px-5 py-3 text-[10px] uppercase tracking-[0.22em] text-ink-faint border-b border-line">
+        {/* Desktop table header */}
+        <div className="hidden sm:grid grid-cols-12 gap-2 px-5 py-3 text-[10px] uppercase tracking-[0.22em] text-ink-faint border-b border-line">
           <div className="col-span-1">Rank</div>
           <div className="col-span-5">Identity</div>
           <div className="col-span-2 text-right">Positions</div>
@@ -192,27 +193,54 @@ export default function LeaderboardPage() {
 
 function RankRow({ r, highlight }: { r: Row; highlight?: boolean }) {
   const short = `${r.address.slice(0, 6)}…${r.address.slice(-4)}`;
+  const rankLabel = r.rank === 1 ? "🥇" : r.rank === 2 ? "🥈" : r.rank === 3 ? "🥉" : `#${r.rank}`;
+
   return (
-    <div className={`grid grid-cols-12 gap-2 px-5 py-3 items-center text-sm border-b border-line/50 last:border-0 ${highlight ? "" : "hover:bg-bg-raised transition-colors"}`}>
-      <div className="col-span-1 font-display tabular text-ink">
-        {r.rank === 1 ? "🥇" : r.rank === 2 ? "🥈" : r.rank === 3 ? "🥉" : `#${r.rank}`}
-      </div>
-      <div className="col-span-5 min-w-0">
-        {r.name ? (
-          <div>
-            <div className="font-display text-gold-300 truncate">{r.name}</div>
-            <div className="text-[10px] text-ink-faint tabular truncate">{short}</div>
+    <div className={`px-4 sm:px-5 py-3 border-b border-line/50 last:border-0 ${highlight ? "" : "hover:bg-bg-raised transition-colors"}`}>
+      {/* Mobile: stacked */}
+      <div className="sm:hidden">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="font-display tabular text-ink shrink-0 w-10">{rankLabel}</span>
+            <div className="min-w-0">
+              {r.name ? (
+                <>
+                  <div className="font-display text-gold-300 truncate">{r.name}</div>
+                  <div className="text-[10px] text-ink-faint tabular truncate">{short}</div>
+                </>
+              ) : (
+                <div className="font-display tabular text-ink truncate">{short}</div>
+              )}
+            </div>
           </div>
-        ) : (
-          <div className="font-display tabular text-ink truncate">{short}</div>
-        )}
+          <div className="text-right shrink-0">
+            <div className="font-display tabular text-gold-300 text-sm">{fmt(r.score, PATHUSD_DECIMALS)}</div>
+            <div className="text-[10px] text-ink-faint">score</div>
+          </div>
+        </div>
+        <div className="mt-2 flex items-center gap-4 text-[11px] text-ink-faint tabular">
+          <span>{r.positions} {r.positions === 1 ? "pos" : "positions"}</span>
+          <span>·</span>
+          <span>{fmt(r.committed, PATHUSD_DECIMALS)} pathUSD</span>
+        </div>
       </div>
-      <div className="col-span-2 text-right tabular text-ink-muted">{r.positions}</div>
-      <div className="col-span-2 text-right tabular text-ink">
-        {fmt(r.committed, PATHUSD_DECIMALS)}
-      </div>
-      <div className="col-span-2 text-right tabular text-gold-300 font-display">
-        {fmt(r.score, PATHUSD_DECIMALS)}
+
+      {/* Desktop: 12-col grid */}
+      <div className="hidden sm:grid grid-cols-12 gap-2 items-center text-sm">
+        <div className="col-span-1 font-display tabular text-ink">{rankLabel}</div>
+        <div className="col-span-5 min-w-0">
+          {r.name ? (
+            <div>
+              <div className="font-display text-gold-300 truncate">{r.name}</div>
+              <div className="text-[10px] text-ink-faint tabular truncate">{short}</div>
+            </div>
+          ) : (
+            <div className="font-display tabular text-ink truncate">{short}</div>
+          )}
+        </div>
+        <div className="col-span-2 text-right tabular text-ink-muted">{r.positions}</div>
+        <div className="col-span-2 text-right tabular text-ink">{fmt(r.committed, PATHUSD_DECIMALS)}</div>
+        <div className="col-span-2 text-right tabular text-gold-300 font-display">{fmt(r.score, PATHUSD_DECIMALS)}</div>
       </div>
     </div>
   );

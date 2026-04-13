@@ -8,24 +8,24 @@ export default function Home() {
         <p className="text-xs uppercase tracking-[0.28em] text-gold-400/80 mb-6">
           Tempo Chain · Mining Protocol
         </p>
-        <h1 className="font-display text-[64px] sm:text-[84px] leading-[0.95] tracking-tightest text-ink">
+        <h1 className="font-display text-[48px] sm:text-[64px] lg:text-[84px] leading-[0.95] tracking-tightest text-ink">
           Mine <span className="text-gold-300">TDOGE</span>.
           <br /> Built on Tempo.
         </h1>
-        <p className="mt-8 max-w-xl text-ink-muted text-lg leading-relaxed">
+        <p className="mt-6 sm:mt-8 max-w-xl text-ink-muted text-base sm:text-lg leading-relaxed">
           Commit pathUSD and earn TDOGE continuously. The emission curve follows
           a four-phase schedule with a hard cap of 210,000,000 TDOGE.
         </p>
-        <div className="mt-10 flex gap-3">
+        <div className="mt-8 sm:mt-10 flex flex-wrap gap-3">
           <Link
             href="/mine"
-            className="px-6 py-3 rounded-md bg-gold-400 text-bg-base font-medium hover:bg-gold-300 transition-colors"
+            className="px-5 sm:px-6 py-3 rounded-md bg-gold-400 text-bg-base font-medium hover:bg-gold-300 transition-colors"
           >
             Start mining
           </Link>
           <Link
             href="/trade"
-            className="px-6 py-3 rounded-md border border-line text-ink hover:border-gold-400/60 transition-colors"
+            className="px-5 sm:px-6 py-3 rounded-md border border-line text-ink hover:border-gold-400/60 transition-colors"
           >
             Explore tokens
           </Link>

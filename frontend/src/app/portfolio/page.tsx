@@ -48,7 +48,7 @@ export default function PortfolioPage() {
     <div className="space-y-12">
       <div>
         <p className="text-xs uppercase tracking-[0.28em] text-gold-400/80">Portfolio</p>
-        <h1 className="font-display text-5xl tracking-tightest mt-3">
+        <h1 className="font-display text-4xl sm:text-5xl tracking-tightest mt-3 break-all">
           {identity ? <>{identity}</> : "Your holdings"}
         </h1>
         {!identity && (

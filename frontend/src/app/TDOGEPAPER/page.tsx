@@ -32,10 +32,10 @@ export default async function TdogePaperPage() {
     <article className="max-w-3xl mx-auto pb-24">
       <div className="mb-8">
         <p className="text-[11px] uppercase tracking-[0.3em] text-gold-400/80">Document</p>
-        <h1 className="font-display text-5xl tracking-tightest mt-3">TDOGE Paper</h1>
+        <h1 className="font-display text-4xl sm:text-5xl tracking-tightest mt-3">TDOGE Paper</h1>
         <p className="text-ink-muted mt-3 text-sm max-w-xl">
-          Full protocol specification — architecture, tokenomics, mining, liquidity,
-          identity, security model. Updated alongside the codebase.
+          Full protocol specification. Architecture, tokenomics, mining, liquidity,
+          identity, and security model. Updated alongside the codebase.
         </p>
       </div>
       <Markdown source={source} />

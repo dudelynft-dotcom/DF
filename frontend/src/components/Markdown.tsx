@@ -9,10 +9,10 @@ export function Markdown({ source }: { source: string }) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          h1: (p) => <h1 className="font-display text-5xl tracking-tightest mt-12 mb-6 text-ink" {...p} />,
-          h2: (p) => <h2 className="font-display text-3xl tracking-tight mt-12 mb-4 text-ink border-b border-line pb-2" {...p} />,
-          h3: (p) => <h3 className="font-display text-xl tracking-tight mt-8 mb-3 text-gold-300" {...p} />,
-          h4: (p) => <h4 className="font-display text-lg mt-6 mb-2 text-ink" {...p} />,
+          h1: (p) => <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl tracking-tightest mt-10 sm:mt-12 mb-4 sm:mb-6 text-ink break-words" {...p} />,
+          h2: (p) => <h2 className="font-display text-2xl sm:text-3xl tracking-tight mt-10 sm:mt-12 mb-3 sm:mb-4 text-ink border-b border-line pb-2 break-words" {...p} />,
+          h3: (p) => <h3 className="font-display text-lg sm:text-xl tracking-tight mt-6 sm:mt-8 mb-2 sm:mb-3 text-gold-300 break-words" {...p} />,
+          h4: (p) => <h4 className="font-display text-base sm:text-lg mt-5 sm:mt-6 mb-2 text-ink" {...p} />,
           p: (p) => <p className="leading-relaxed my-4 text-ink-muted" {...p} />,
           a: (p) => <a className="text-gold-300 hover:text-gold-200 underline underline-offset-2" {...p} />,
           strong: (p) => <strong className="text-ink font-semibold" {...p} />,

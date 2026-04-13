@@ -193,7 +193,7 @@ export default function MinePage() {
       </section>
 
       {/* Your wallet */}
-      <section className="grid grid-cols-3 gap-px bg-line rounded-xl overflow-hidden">
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-line rounded-xl overflow-hidden">
         <Stat label="Open Positions"    value={`${openPositions.length}${maxPositions ? ` / ${maxPositions}` : ""}`} unit="per wallet" />
         <Stat label="Committed"         value={cap ? `${fmtUsd(committedSum)} / ${fmtUsd(cap)}` : "-"} unit="pathUSD active" />
         <Stat label="Your Score"        value={score !== undefined ? fmtScore(score) : "-"} unit="miner points" />
