@@ -1,0 +1,3 @@
+web: npm run start
+indexer: npm run indexer
+keeper: npm run keeper
