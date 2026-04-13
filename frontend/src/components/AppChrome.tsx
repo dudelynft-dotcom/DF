@@ -30,8 +30,15 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
           <div className="max-w-6xl mx-auto flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 gap-3">
             {/* Brand */}
             <div className="flex items-center gap-6 md:gap-10 min-w-0">
-              <Link href="/" className="flex items-center gap-2 shrink-0">
-                <span className="h-2 w-2 rounded-full bg-gold-400 shadow-[0_0_12px_rgba(201,163,74,0.7)]" />
+              <Link href="/" className="flex items-center gap-2.5 shrink-0">
+                {/* Doge avatar. Place an image at frontend/public/doge.png or .jpg */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/doge.png"
+                  alt=""
+                  aria-hidden
+                  className="h-8 w-8 rounded-full object-cover border border-gold-400/40 shadow-[0_0_10px_rgba(201,163,74,0.35)] bg-gold-400/10"
+                />
                 <span className="font-display text-lg sm:text-xl tracking-tightest">DOGE FORGE</span>
               </Link>
               <nav className="hidden md:flex gap-5 lg:gap-7 text-sm text-ink-muted">

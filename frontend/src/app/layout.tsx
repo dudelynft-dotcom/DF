@@ -15,6 +15,11 @@ const fraunces = Fraunces({
 export const metadata: Metadata = {
   title: "DOGE FORGE · Tempo",
   description: "Mine TDOGE. Trade on Tempo.",
+  icons: {
+    icon: [{ url: "/doge.png", type: "image/png" }],
+    shortcut: "/doge.png",
+    apple: "/doge.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
