@@ -31,13 +31,13 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
             {/* Brand */}
             <div className="flex items-center gap-6 md:gap-10 min-w-0">
               <Link href="/" className="flex items-center gap-2.5 shrink-0">
-                {/* Doge avatar. Place an image at frontend/public/doge.png or .jpg */}
+                {/* Doge avatar. Use a transparent-background PNG at frontend/public/doge.png */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src="/doge.png"
                   alt=""
                   aria-hidden
-                  className="h-8 w-8 rounded-full object-cover border border-gold-400/40 shadow-[0_0_10px_rgba(201,163,74,0.35)] bg-gold-400/10"
+                  className="h-9 w-9 object-contain drop-shadow-[0_0_8px_rgba(201,163,74,0.35)]"
                 />
                 <span className="font-display text-lg sm:text-xl tracking-tightest">DOGE FORGE</span>
               </Link>
