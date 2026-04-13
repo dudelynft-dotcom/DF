@@ -1,7 +1,12 @@
 import Database from "better-sqlite3";
 import "dotenv/config";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 
-export const db = new Database(process.env.DB_PATH ?? "./forge.db");
+const dbPath = process.env.DB_PATH ?? "./forge.db";
+mkdirSync(dirname(dbPath), { recursive: true });
+
+export const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
 
 db.exec(`
