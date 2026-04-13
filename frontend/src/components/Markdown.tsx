@@ -32,25 +32,29 @@ export function Markdown({ source }: { source: string }) {
           thead: (p) => <thead className="bg-bg-raised text-ink-faint" {...p} />,
           th: (p) => <th className="px-4 py-3 text-left text-[11px] uppercase tracking-[0.18em] font-medium" {...p} />,
           td: (p) => <td className="px-4 py-3 border-t border-line text-ink-muted" {...p} />,
+          pre: (p) => (
+            <pre
+              className="my-4 p-4 rounded-lg bg-bg-base border border-line overflow-x-auto max-w-full text-[11px] sm:text-[12px] tabular text-ink whitespace-pre"
+              {...p}
+            />
+          ),
           code: ({ className, children, ...rest }) => {
             const lang = /language-(\w+)/.exec(className || "")?.[1];
             const text = String(children ?? "").replace(/\n$/, "");
             if (lang === "mermaid") {
               return <Mermaid code={text} />;
             }
-            // inline vs block
-            const isBlock = (rest as { node?: unknown }).node !== undefined && className?.startsWith("language-");
+            // Block code: react-markdown wraps it in <pre>, so it carries a className
+            // OR the content spans multiple lines. In that case render plain <code> and
+            // let the <pre> override above provide the scroll container + styling.
+            const isBlock = !!className || text.includes("\n");
             if (isBlock) {
-              return (
-                <pre className="my-4 p-4 rounded-lg bg-bg-base border border-line overflow-x-auto text-[11px] sm:text-[12px] tabular text-ink whitespace-pre">
-                  <code className={className} {...rest}>{children}</code>
-                </pre>
-              );
+              return <code className={className} {...rest}>{children}</code>;
             }
             return (
               <code
-                className="px-1.5 py-0.5 rounded bg-bg-base border border-line text-[12px] tabular text-gold-200"
-                style={{ wordBreak: "break-all", overflowWrap: "anywhere" }}
+                className="px-1.5 py-0.5 rounded bg-bg-base border border-line text-[12px] tabular text-gold-200 break-words"
+                style={{ wordBreak: "break-word", overflowWrap: "anywhere", whiteSpace: "normal" }}
                 {...rest}
               >
                 {children}
