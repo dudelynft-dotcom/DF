@@ -42,13 +42,17 @@ export function Markdown({ source }: { source: string }) {
             const isBlock = (rest as { node?: unknown }).node !== undefined && className?.startsWith("language-");
             if (isBlock) {
               return (
-                <pre className="my-4 p-4 rounded-lg bg-bg-base border border-line overflow-x-auto text-[12px] tabular text-ink">
+                <pre className="my-4 p-4 rounded-lg bg-bg-base border border-line overflow-x-auto text-[11px] sm:text-[12px] tabular text-ink whitespace-pre">
                   <code className={className} {...rest}>{children}</code>
                 </pre>
               );
             }
             return (
-              <code className="px-1.5 py-0.5 rounded bg-bg-base border border-line text-[12px] tabular text-gold-200" {...rest}>
+              <code
+                className="px-1.5 py-0.5 rounded bg-bg-base border border-line text-[12px] tabular text-gold-200"
+                style={{ wordBreak: "break-all", overflowWrap: "anywhere" }}
+                {...rest}
+              >
                 {children}
               </code>
             );

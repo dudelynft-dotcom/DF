@@ -29,7 +29,7 @@ async function loadWhitepaper(): Promise<string> {
 export default async function TdogePaperPage() {
   const source = await loadWhitepaper();
   return (
-    <article className="max-w-3xl mx-auto pb-24">
+    <article className="max-w-3xl mx-auto pb-24 overflow-x-hidden">
       <div className="mb-8">
         <p className="text-[11px] uppercase tracking-[0.3em] text-gold-400/80">Document</p>
         <h1 className="font-display text-4xl sm:text-5xl tracking-tightest mt-3">TDOGE Paper</h1>

@@ -51,7 +51,13 @@ export function Mermaid({ code }: { code: string }) {
         const id = "mmd-" + Math.random().toString(36).slice(2);
         const { svg } = await mermaid.render(id, code);
         if (!cancelled && ref.current) {
-          ref.current.innerHTML = svg;
+          // Force the SVG to be responsive: strip fixed pixel width/height and
+          // let CSS size it to the container.
+          const responsive = svg
+            .replace(/\swidth="[^"]*"/, "")
+            .replace(/\sheight="[^"]*"/, "")
+            .replace(/<svg /, '<svg style="width:100%;height:auto;max-width:100%;" ');
+          ref.current.innerHTML = responsive;
         }
       } catch (e) {
         if (!cancelled) setError((e as Error).message ?? String(e));
@@ -73,7 +79,7 @@ export function Mermaid({ code }: { code: string }) {
   return (
     <div
       ref={ref}
-      className="my-6 flex justify-center overflow-x-auto py-4 rounded-xl bg-bg-base border border-line"
+      className="my-6 w-full overflow-x-auto py-4 px-3 rounded-xl bg-bg-base border border-line"
     />
   );
 }
