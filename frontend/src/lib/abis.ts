@@ -8,6 +8,20 @@ export const minerAbi = [
   { type: "function", name: "harvestAll", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "flush",    stateMutability: "nonpayable", inputs: [], outputs: [] },
 
+  // ---- admin ----
+  { type: "function", name: "owner",    stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+  { type: "function", name: "paused",   stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
+  { type: "function", name: "pause",    stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { type: "function", name: "unpause",  stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { type: "function", name: "globalMultiplier",  stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "flowRateBpsPerDay", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "perWalletCap",      stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "pendingLiquidity",  stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "pendingTreasury",   stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "setGlobalMultiplier",  stateMutability: "nonpayable", inputs: [{ name: "v", type: "uint256" }], outputs: [] },
+  { type: "function", name: "setFlowRateBpsPerDay", stateMutability: "nonpayable", inputs: [{ name: "v", type: "uint256" }], outputs: [] },
+  { type: "function", name: "setPerWalletCap",      stateMutability: "nonpayable", inputs: [{ name: "v", type: "uint256" }], outputs: [] },
+
   {
     type: "function", name: "getPositions", stateMutability: "view",
     inputs: [{ name: "user", type: "address" }],
