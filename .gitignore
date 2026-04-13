@@ -1,0 +1,26 @@
+# contracts
+contracts/lib/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/.env
+
+# frontend
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+frontend/.env
+
+# backend
+backend/node_modules/
+backend/.env
+backend/*.db
+backend/*.db-wal
+backend/*.db-shm
+
+# misc
+.DS_Store
+.vscode/
+.claude/
+*.log
+

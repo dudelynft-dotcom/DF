@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+
+html, body {
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(201, 163, 74, 0.08), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(90, 74, 40, 0.18), transparent 55%),
+    #0E0D08;
+  color: #F5ECD0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
+}
+
+::selection { background: rgba(201, 163, 74, 0.35); color: #F5ECD0; }
+
+/* Subtle divider */
+.hairline { background: linear-gradient(90deg, transparent, rgba(201,163,74,0.35), transparent); height: 1px; }
+
+/* Number tabular for figures */
+.tabular { font-variant-numeric: tabular-nums; }
+
