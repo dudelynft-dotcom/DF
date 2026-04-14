@@ -4,6 +4,7 @@ import { CURATED_TOKENS, explorerLink, type CuratedToken } from "@/config/tokens
 import { addresses } from "@/config/chain";
 import { TradeModal, type TradeToken } from "@/components/TradeModal";
 import { PriceChart } from "@/components/PriceChart";
+import { SwapForm } from "@/components/SwapForm";
 import { useTokenMetrics, fmtUsd, fmtSupply, fmtPct, type TokenMetrics } from "@/lib/metrics";
 
 type DiscoveredToken = {
@@ -218,7 +219,6 @@ export default function TradePage() {
           metricsByAddr={metricsByAddr}
           selected={selectedToken}
           onSelect={(t) => setSelectedAddr(t.address)}
-          onTrade={(t) => openTrade({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals })}
         />
       ) : view === "grid" ? (
         <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -412,14 +412,13 @@ function TokenCard({
 /// selected-token detail + metrics + swap trigger on the right. Mobile stacks
 /// the panes vertically.
 function ProView({
-  verified, unverified, metricsByAddr, selected, onSelect, onTrade,
+  verified, unverified, metricsByAddr, selected, onSelect,
 }: {
   verified: TileToken[];
   unverified: TileToken[];
   metricsByAddr: Record<string, TokenMetrics | undefined>;
   selected: TileToken | null;
   onSelect: (t: TileToken) => void;
-  onTrade: (t: TileToken) => void;
 }) {
   return (
     <div className="grid lg:grid-cols-[280px_1fr] gap-4 min-h-[600px]">
@@ -432,7 +431,7 @@ function ProView({
       {/* Right: detail + swap trigger */}
       <section className="rounded-xl border border-line bg-bg-surface p-6 flex flex-col gap-6">
         {selected ? (
-          <ProDetail token={selected} metrics={metricsByAddr[selected.address.toLowerCase()]} onTrade={() => onTrade(selected)} />
+          <ProDetail token={selected} metrics={metricsByAddr[selected.address.toLowerCase()]} />
         ) : (
           <div className="flex-1 flex items-center justify-center text-ink-muted text-sm">
             Select a market to view details.
@@ -503,11 +502,10 @@ function MarketListGroup({
 }
 
 function ProDetail({
-  token, metrics, onTrade,
+  token, metrics,
 }: {
   token: TileToken;
   metrics?: TokenMetrics;
-  onTrade: () => void;
 }) {
   const change = metrics?.priceChange24hPct ?? null;
   const changeClass =
@@ -516,11 +514,13 @@ function ProDetail({
     : change < 0 ? "text-red-300"
     : "text-ink-muted";
 
+  const canTrade = token.kind !== "native-stable";
+
   return (
     <>
       {/* Header */}
       <div className="flex items-center gap-4">
-        <TokenIcon token={token} size={48} />
+        <TokenIcon key={token.address} token={token} size={48} />
         <div>
           <div className="flex items-center gap-2">
             <h2 className="font-display text-3xl tracking-tight text-ink">{token.symbol}</h2>
@@ -539,53 +539,58 @@ function ProDetail({
         </div>
       </div>
 
-      {/* Live price chart — only fDOGE/USDC is indexed today. Other tokens
-          will show the "No swap history" state until we extend the backend
-          to track their UnitFlow pair addresses. */}
-      <div className="h-48 sm:h-64 rounded-lg border border-line bg-bg-base overflow-hidden">
-        <PriceChart
-          pair={token.address.toLowerCase() === addresses.doge.toLowerCase() ? addresses.pair : undefined}
-          interval="1h"
-          className="w-full h-full"
-        />
-      </div>
+      {/* Chart + swap panel, Hyperliquid-style 2-column. Stacks on mobile. */}
+      <div className="grid lg:grid-cols-[1fr_320px] gap-4">
+        <div className="flex flex-col gap-4">
+          {/* Price chart — only fDOGE/USDC is indexed today. */}
+          <div className="h-48 sm:h-64 rounded-lg border border-line bg-bg-base overflow-hidden">
+            <PriceChart
+              pair={token.address.toLowerCase() === addresses.doge.toLowerCase() ? addresses.pair : undefined}
+              interval="1h"
+              className="w-full h-full"
+            />
+          </div>
 
-      {/* Metrics strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-line rounded-lg overflow-hidden">
-        <MetricCell label="Market Cap"   value={fmtUsd(metrics?.marketCapUsd ?? null)} />
-        <MetricCell label="FDV"          value={fmtUsd(metrics?.fdvUsd ?? null)} />
-        <MetricCell label="Liquidity"    value={fmtUsd(metrics?.liquidityUsd ?? null)} />
-        <MetricCell label="24h Volume"   value={fmtUsd(metrics?.volume24hUsd ?? null)} />
-        <MetricCell label="Circ. Supply" value={fmtSupply(metrics?.circulatingSupply ?? null)} />
-        <MetricCell label="Total Supply" value={fmtSupply(metrics?.totalSupply ?? null)} />
-        <MetricCell label="Contract"     value={`${token.address.slice(0, 6)}…${token.address.slice(-4)}`} mono />
-        <MetricCell
-          label="Explorer"
-          value={
-            <a
-              href={explorerLink(token.address)}
-              target="_blank" rel="noreferrer"
-              className="text-gold-300 hover:text-gold-200 transition-colors"
-            >
-              Open ↗
-            </a>
-          }
-        />
-      </div>
-
-      {/* Trade CTA */}
-      {token.kind !== "native-stable" ? (
-        <button
-          onClick={onTrade}
-          className="w-full px-4 py-4 rounded-lg bg-gold-400 text-bg-base font-semibold text-base hover:bg-gold-300 transition-colors"
-        >
-          Trade {token.symbol}
-        </button>
-      ) : (
-        <div className="w-full px-4 py-4 rounded-lg border border-line text-center text-sm text-ink-muted">
-          Native stablecoin · used as the quote asset for every pair.
+          {/* Metrics strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-line rounded-lg overflow-hidden">
+            <MetricCell label="Market Cap"   value={fmtUsd(metrics?.marketCapUsd ?? null)} />
+            <MetricCell label="FDV"          value={fmtUsd(metrics?.fdvUsd ?? null)} />
+            <MetricCell label="Liquidity"    value={fmtUsd(metrics?.liquidityUsd ?? null)} />
+            <MetricCell label="24h Volume"   value={fmtUsd(metrics?.volume24hUsd ?? null)} />
+            <MetricCell label="Circ. Supply" value={fmtSupply(metrics?.circulatingSupply ?? null)} />
+            <MetricCell label="Total Supply" value={fmtSupply(metrics?.totalSupply ?? null)} />
+            <MetricCell label="Contract"     value={`${token.address.slice(0, 6)}…${token.address.slice(-4)}`} mono />
+            <MetricCell
+              label="Explorer"
+              value={
+                <a
+                  href={explorerLink(token.address)}
+                  target="_blank" rel="noreferrer"
+                  className="text-gold-300 hover:text-gold-200 transition-colors"
+                >
+                  Open ↗
+                </a>
+              }
+            />
+          </div>
         </div>
-      )}
+
+        {/* Right rail: inline swap form. Re-mounts per token so stale quote
+            state doesn't leak between markets. */}
+        <aside className="rounded-lg border border-line bg-bg-base p-4">
+          <div className="text-[10px] uppercase tracking-[0.24em] text-gold-400/90 mb-3">Trade</div>
+          {canTrade ? (
+            <SwapForm
+              key={token.address}
+              token={{ address: token.address, symbol: token.symbol, name: token.name, decimals: token.decimals }}
+            />
+          ) : (
+            <div className="text-sm text-ink-muted leading-relaxed">
+              <span className="text-ink font-medium">{token.symbol}</span> is the native quote asset — select any other market to trade it.
+            </div>
+          )}
+        </aside>
+      </div>
     </>
   );
 }
