@@ -551,16 +551,16 @@ function ProDetail({
             <ChartForToken token={token} />
           </div>
 
-          {/* Metrics strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-line rounded-lg overflow-hidden">
-            <MetricCell label="Market Cap"   value={fmtUsd(metrics?.marketCapUsd ?? null)} />
-            <MetricCell label="FDV"          value={fmtUsd(metrics?.fdvUsd ?? null)} />
-            <MetricCell label="Liquidity"    value={fmtUsd(metrics?.liquidityUsd ?? null)} />
-            <MetricCell label="24h Volume"   value={fmtUsd(metrics?.volume24hUsd ?? null)} />
-            <MetricCell label="Circ. Supply" value={fmtSupply(metrics?.circulatingSupply ?? null)} />
-            <MetricCell label="Total Supply" value={fmtSupply(metrics?.totalSupply ?? null)} />
-            <MetricCell label="Contract"     value={`${token.address.slice(0, 6)}…${token.address.slice(-4)}`} mono />
-            <MetricCell
+          {/* Metrics strip — flat rows for readability in the narrow left column. */}
+          <div className="rounded-lg border border-line bg-bg-base overflow-hidden divide-y divide-line">
+            <DetailRow label="Market Cap"   value={fmtUsd(metrics?.marketCapUsd ?? null)} />
+            <DetailRow label="FDV"          value={fmtUsd(metrics?.fdvUsd ?? null)} />
+            <DetailRow label="Liquidity"    value={fmtUsd(metrics?.liquidityUsd ?? null)} />
+            <DetailRow label="24h Volume"   value={fmtUsd(metrics?.volume24hUsd ?? null)} />
+            <DetailRow label="Circ. Supply" value={fmtSupply(metrics?.circulatingSupply ?? null)} />
+            <DetailRow label="Total Supply" value={fmtSupply(metrics?.totalSupply ?? null)} />
+            <DetailRow label="Contract"     value={`${token.address.slice(0, 6)}…${token.address.slice(-4)}`} mono />
+            <DetailRow
               label="Explorer"
               value={
                 <a
@@ -620,11 +620,11 @@ function ChartForToken({ token }: { token: TileToken }) {
   return <PriceChart key={token.address} pair={pair} interval="1h" className="w-full h-full" />;
 }
 
-function MetricCell({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+function DetailRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
-    <div className="p-3 bg-bg-surface">
-      <div className="text-[10px] uppercase tracking-[0.18em] text-ink-faint">{label}</div>
-      <div className={`mt-1 text-sm text-ink ${mono ? "tabular" : ""}`}>{value}</div>
+    <div className="flex items-center justify-between gap-4 px-4 py-2.5 text-sm">
+      <span className="text-[11px] uppercase tracking-[0.18em] text-ink-faint whitespace-nowrap">{label}</span>
+      <span className={`text-ink text-right ${mono ? "tabular" : ""}`}>{value}</span>
     </div>
   );
 }
