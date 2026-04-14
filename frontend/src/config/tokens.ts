@@ -7,6 +7,7 @@ export type CuratedToken = {
   decimals: number;
   kind: "native-stable" | "project" | "stablecoin";
   description?: string;
+  iconUrl?: string;
 };
 
 /// Curated list is always marked verified. Backend discovery adds to the
@@ -21,6 +22,7 @@ const RAW_CURATED: Array<CuratedToken | null> = [
     decimals: 18,
     kind:    "project",
     description: "The native mining reward of DOGE FORGE. 210M supply cap.",
+    iconUrl: "/doge.png",
   } : null,
   addresses.usdc ? {
     address: addresses.usdc,
@@ -29,6 +31,7 @@ const RAW_CURATED: Array<CuratedToken | null> = [
     decimals: 6,
     kind:    "native-stable",
     description: "Arc's native gas token; also the canonical stablecoin for DOGE FORGE.",
+    iconUrl: "https://assets.coingecko.com/coins/images/6319/small/usdc.png",
   } : null,
   // Arc's official predeployed stablecoins (docs.arc.network).
   {
@@ -38,6 +41,7 @@ const RAW_CURATED: Array<CuratedToken | null> = [
     decimals: 6,
     kind:    "stablecoin",
     description: "Circle's euro-backed stablecoin, predeployed on Arc.",
+    iconUrl: "https://assets.coingecko.com/coins/images/26045/small/euro.png",
   },
   {
     address: "0xe9185F0c5F296Ed1797AaE4238D26CCaBEadb86C",
@@ -46,6 +50,7 @@ const RAW_CURATED: Array<CuratedToken | null> = [
     decimals: 6,
     kind:    "stablecoin",
     description: "Yield-bearing USD stablecoin (Hashnote), predeployed on Arc.",
+    iconUrl: "https://assets.coingecko.com/coins/images/28557/small/HASH_202311.png",
   },
   // UnitFlow's wrapped USDC (paired against most of their tokens).
   {
@@ -55,6 +60,7 @@ const RAW_CURATED: Array<CuratedToken | null> = [
     decimals: 6,
     kind:    "stablecoin",
     description: "UnitFlow's wrapped USDC for AMM pool routing.",
+    iconUrl: "https://assets.coingecko.com/coins/images/6319/small/usdc.png",
   },
 ];
 

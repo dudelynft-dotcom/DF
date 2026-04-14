@@ -21,7 +21,7 @@ export type TokenMetrics = {
 const TDOGE_INITIAL_CAP = 210_000_000;
 
 /// Hook — returns metrics for every supplied token address in one pass.
-export function useTokenMetrics(tokens: { address: `0x${string}`; decimals: number; symbol: string }[]) {
+export function useTokenMetrics(tokens: { address: `0x${string}`; decimals: number; symbol: string; kind?: string }[]) {
   // 1 read per token: totalSupply
   // 1 global: pair reserves for TDOGE price
   const supplyContracts = tokens.map((t) => ({
@@ -73,7 +73,10 @@ export function useTokenMetrics(tokens: { address: `0x${string}`; decimals: numb
       const totalHuman = total !== undefined ? Number(formatUnits(total, t.decimals)) : null;
 
       const isTdoge = t.address.toLowerCase() === addresses.doge.toLowerCase();
-      const isStable = /USD$/i.test(t.symbol) || t.address.toLowerCase() === addresses.pathUSD.toLowerCase();
+      const isStable =
+        t.kind === "stablecoin" || t.kind === "native-stable"
+        || /USD$|USDC$|USDT$|USYC$/i.test(t.symbol)
+        || t.address.toLowerCase() === addresses.usdc.toLowerCase();
 
       let price: number | null = null;
       if (isTdoge) price = tdogePriceUsd;

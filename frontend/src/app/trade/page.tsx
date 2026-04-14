@@ -46,7 +46,7 @@ export default function TradePage() {
   const verifiedAll = useMemo<TileToken[]>(() => [
     ...CURATED_TOKENS.map((t) => ({
       address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals,
-      kind: t.kind, description: t.description, verified: true,
+      kind: t.kind, description: t.description, iconUrl: t.iconUrl, verified: true,
     })),
     ...remote.verified.map((t) => ({
       address: t.address as `0x${string}`, symbol: t.symbol, name: t.name, decimals: t.decimals,
@@ -262,9 +262,39 @@ type TileToken = {
   decimals: number;
   kind?: CuratedToken["kind"];
   description?: string;
+  iconUrl?: string;
   verified: boolean;
   first_seen?: number;
 };
+
+/// Small round token icon. Falls back to colored initials when no image set or
+/// the remote URL fails to load (common on testnets with incomplete logos).
+function TokenIcon({ token, size = 32 }: { token: TileToken; size?: number }) {
+  const [errored, setErrored] = useState(false);
+  if (token.iconUrl && !errored) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={token.iconUrl}
+        alt=""
+        aria-hidden
+        width={size}
+        height={size}
+        onError={() => setErrored(true)}
+        className="rounded-full bg-bg-base shrink-0 object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-lg bg-gold-400/10 border border-gold-400/30 flex items-center justify-center text-gold-300 font-semibold shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.38 }}
+    >
+      {token.symbol.slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
 
 function TokenCard({
   token, metrics, onTrade,
@@ -285,9 +315,7 @@ function TokenCard({
       {/* header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="h-10 w-10 rounded-lg bg-gold-400/10 border border-gold-400/30 flex items-center justify-center text-gold-300 text-sm font-semibold shrink-0">
-            {token.symbol.slice(0, 2).toUpperCase()}
-          </div>
+          <TokenIcon token={token} size={40} />
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="font-display text-lg text-ink truncate">{token.symbol}</span>
@@ -390,9 +418,7 @@ function TokenTable({
           >
             {/* Token cell */}
             <div className="flex items-center gap-3 min-w-0">
-              <div className="h-8 w-8 rounded-md bg-gold-400/10 border border-gold-400/30 flex items-center justify-center text-gold-300 text-[11px] font-semibold shrink-0">
-                {t.symbol.slice(0, 2).toUpperCase()}
-              </div>
+              <TokenIcon token={t} size={32} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className="font-medium text-ink truncate">{t.symbol}</span>
@@ -465,9 +491,7 @@ function UnverifiedCard({ token, onTrade }: { token: TileToken; onTrade: () => v
     <div className="rounded-xl border border-line bg-bg-surface p-5 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="h-10 w-10 rounded-lg bg-white/5 border border-line flex items-center justify-center text-ink-muted text-sm font-semibold shrink-0">
-            {token.symbol.slice(0, 2).toUpperCase()}
-          </div>
+          <TokenIcon token={token} size={40} />
           <div className="min-w-0">
             <span className="font-display text-lg text-ink truncate">{token.symbol}</span>
             <div className="text-xs text-ink-faint mt-0.5 truncate">{token.name}</div>
