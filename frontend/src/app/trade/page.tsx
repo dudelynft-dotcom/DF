@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CURATED_TOKENS, explorerLink, type CuratedToken } from "@/config/tokens";
 import { addresses } from "@/config/chain";
 import { TradeModal, type TradeToken } from "@/components/TradeModal";
+import { PriceChart } from "@/components/PriceChart";
 import { useTokenMetrics, fmtUsd, fmtSupply, fmtPct, type TokenMetrics } from "@/lib/metrics";
 
 type DiscoveredToken = {
@@ -538,20 +539,15 @@ function ProDetail({
         </div>
       </div>
 
-      {/* Chart placeholder — swap for lightweight-charts in a future pass */}
-      <div className="relative h-48 sm:h-64 rounded-lg border border-line bg-bg-base overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center text-ink-faint text-xs">
-          Price chart — coming soon
-        </div>
-        {/* Faint diagonal pattern to suggest a chart canvas */}
-        <svg className="absolute inset-0 w-full h-full opacity-[0.04]" preserveAspectRatio="none" viewBox="0 0 100 100">
-          <defs>
-            <pattern id="gridPattern" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
-              <path d="M 10 0 L 0 0 0 10" fill="none" stroke="currentColor" strokeWidth="0.2" />
-            </pattern>
-          </defs>
-          <rect width="100" height="100" fill="url(#gridPattern)" />
-        </svg>
+      {/* Live price chart — only fDOGE/USDC is indexed today. Other tokens
+          will show the "No swap history" state until we extend the backend
+          to track their UnitFlow pair addresses. */}
+      <div className="h-48 sm:h-64 rounded-lg border border-line bg-bg-base overflow-hidden">
+        <PriceChart
+          pair={token.address.toLowerCase() === addresses.doge.toLowerCase() ? addresses.pair : undefined}
+          interval="1h"
+          className="w-full h-full"
+        />
       </div>
 
       {/* Metrics strip */}

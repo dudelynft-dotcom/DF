@@ -55,6 +55,61 @@ function requireAdmin(req: express.Request, res: express.Response): boolean {
   return true;
 }
 
+/// GET /prices/:pair?interval=1h&limit=100
+/// Returns OHLC candles aggregated from `swaps` for the given pair.
+/// interval: 1m | 5m | 15m | 1h | 4h | 1d   (default 1h)
+/// limit:    max candles (default 100, capped at 500)
+app.get("/prices/:pair", (req, res) => {
+  const pair = String(req.params.pair).toLowerCase();
+  const interval = String(req.query.interval ?? "1h");
+  const limit    = Math.min(500, Math.max(1, Number(req.query.limit ?? 100)));
+
+  const bucketSec: Record<string, number> = {
+    "1m": 60, "5m": 300, "15m": 900, "1h": 3600, "4h": 14_400, "1d": 86_400,
+  };
+  const step = bucketSec[interval];
+  if (!step) return res.status(400).json({ error: "bad interval" });
+
+  // Group swaps into time buckets. SQLite lacks window functions in older
+  // builds — this is the portable form.
+  const rows = db.prepare(
+    `SELECT
+       (timestamp / ?) * ?             AS ts,
+       MIN(price_num)                  AS low,
+       MAX(price_num)                  AS high,
+       (SELECT price_num FROM swaps s2
+         WHERE s2.pair = s.pair
+           AND (s2.timestamp / ?) * ? = (s.timestamp / ?) * ?
+         ORDER BY s2.timestamp ASC, s2.log_index ASC LIMIT 1) AS open,
+       (SELECT price_num FROM swaps s2
+         WHERE s2.pair = s.pair
+           AND (s2.timestamp / ?) * ? = (s.timestamp / ?) * ?
+         ORDER BY s2.timestamp DESC, s2.log_index DESC LIMIT 1) AS close,
+       COUNT(*)                        AS trades
+     FROM swaps s
+     WHERE pair = ?
+     GROUP BY ts
+     ORDER BY ts DESC
+     LIMIT ?`,
+  ).all(step, step, step, step, step, step, step, step, step, step, pair, limit) as Array<{
+    ts: number; low: number; high: number; open: number; close: number; trades: number;
+  }>;
+
+  // Reverse so oldest-first for chart libs.
+  res.json({
+    pair,
+    interval,
+    candles: rows.reverse().map((r) => ({
+      time:   r.ts,
+      open:   r.open,
+      high:   r.high,
+      low:    r.low,
+      close:  r.close,
+      trades: r.trades,
+    })),
+  });
+});
+
 /// POST /admin/verify  { address, verified }
 app.post("/admin/verify", (req, res) => {
   if (!requireAdmin(req, res)) return;
