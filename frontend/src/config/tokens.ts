@@ -30,6 +30,32 @@ const RAW_CURATED: Array<CuratedToken | null> = [
     kind:    "native-stable",
     description: "Arc's native gas token; also the canonical stablecoin for DOGE FORGE.",
   } : null,
+  // Arc's official predeployed stablecoins (docs.arc.network).
+  {
+    address: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+    symbol:  "EURC",
+    name:    "Euro Coin",
+    decimals: 6,
+    kind:    "stablecoin",
+    description: "Circle's euro-backed stablecoin, predeployed on Arc.",
+  },
+  {
+    address: "0xe9185F0c5F296Ed1797AaE4238D26CCaBEadb86C",
+    symbol:  "USYC",
+    name:    "US Yield Coin",
+    decimals: 6,
+    kind:    "stablecoin",
+    description: "Yield-bearing USD stablecoin (Hashnote), predeployed on Arc.",
+  },
+  // UnitFlow's wrapped USDC (paired against most of their tokens).
+  {
+    address: addresses.wusdc,
+    symbol:  "WUSDC",
+    name:    "Wrapped USDC",
+    decimals: 6,
+    kind:    "stablecoin",
+    description: "UnitFlow's wrapped USDC for AMM pool routing.",
+  },
 ];
 
 export const CURATED_TOKENS: CuratedToken[] = RAW_CURATED.filter(

@@ -87,6 +87,21 @@ export default function TradePage() {
   const [tradeToken, setTradeToken] = useState<TradeToken | null>(null);
   const openTrade = (t: TradeToken) => setTradeToken(t);
 
+  // Search — filters both verified and unverified. Matches on symbol, name,
+  // and address (so a user can paste a contract address to find it).
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  function matches(t: TileToken): boolean {
+    if (!q) return true;
+    return (
+      t.symbol.toLowerCase().includes(q) ||
+      t.name.toLowerCase().includes(q) ||
+      t.address.toLowerCase().includes(q)
+    );
+  }
+  const displayedVerified   = sortedVerified.filter(matches);
+  const displayedUnverified = unverifiedAll.filter(matches);
+
   return (
     <div className="space-y-10">
       <div>
@@ -96,6 +111,32 @@ export default function TradePage() {
           Live on-chain pricing for every verified pair. fDOGE routes through the
           DOGE FORGE AMM on Arc; stablecoin transfers use standard ERC-20 routes.
         </p>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by symbol, name, or contract address"
+          className="w-full pl-10 pr-4 py-3 rounded-lg bg-bg-surface border border-line text-sm tabular text-ink placeholder:text-ink-faint focus:border-gold-400/60 focus:outline-none transition-colors"
+        />
+        <svg
+          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-faint pointer-events-none"
+          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+        >
+          <circle cx="11" cy="11" r="7" />
+          <path d="m21 21-4.3-4.3" strokeLinecap="round" />
+        </svg>
+        {query && (
+          <button
+            onClick={() => setQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full text-ink-faint hover:text-ink hover:bg-white/5 flex items-center justify-center transition-colors"
+            aria-label="Clear search"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {/* Sort bar */}
@@ -119,15 +160,18 @@ export default function TradePage() {
           ))}
         </div>
         <div className="text-xs text-ink-faint">
-          Verified: <span className="text-ink tabular">{sortedVerified.length}</span>
+          Verified: <span className="text-ink tabular">{displayedVerified.length}</span>
           {" · "}
-          Unverified: <span className="text-ink tabular">{unverifiedAll.length}</span>
+          Unverified: <span className="text-ink tabular">{displayedUnverified.length}</span>
+          {q && (
+            <span className="ml-2 text-gold-300">· filtered by &ldquo;{query}&rdquo;</span>
+          )}
         </div>
       </div>
 
       {/* Verified grid */}
       <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {sortedVerified.map((t) => (
+        {displayedVerified.map((t) => (
           <TokenCard
             key={t.address}
             token={t}
@@ -135,6 +179,11 @@ export default function TradePage() {
             onTrade={() => openTrade({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals })}
           />
         ))}
+        {displayedVerified.length === 0 && q && (
+          <div className="sm:col-span-2 lg:col-span-3 rounded-xl border border-line bg-bg-surface p-6 text-center text-ink-muted text-sm">
+            No verified tokens match &ldquo;{query}&rdquo;.
+          </div>
+        )}
       </section>
 
       {/* Unverified grid */}
@@ -143,18 +192,20 @@ export default function TradePage() {
           <h2 className="font-display text-2xl tracking-tight flex items-center gap-2">
             Unverified
             <span className="text-[11px] uppercase tracking-[0.22em] text-ink-muted bg-white/5 border border-line rounded-full px-2 py-0.5">
-              {unverifiedAll.length}
+              {displayedUnverified.length}
             </span>
           </h2>
           <span className="text-xs text-ink-faint">Auto-discovered. Verify before trading.</span>
         </div>
-        {unverifiedAll.length === 0 ? (
+        {displayedUnverified.length === 0 ? (
           <div className="rounded-xl border border-line bg-bg-surface p-8 text-center text-ink-muted text-sm">
-            No unverified tokens discovered yet. The indexer scans new contract deployments on Arc as it runs.
+            {q
+              ? <>No unverified tokens match &ldquo;{query}&rdquo;.</>
+              : <>No unverified tokens discovered yet. The indexer scans new contract deployments on Arc as it runs.</>}
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {unverifiedAll.map((t) => (
+            {displayedUnverified.map((t) => (
               <UnverifiedCard
                 key={t.address}
                 token={t}
@@ -206,6 +257,7 @@ function TokenCard({
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="font-display text-lg text-ink truncate">{token.symbol}</span>
+              <VerifiedTick />
               {token.kind === "project" && (
                 <span className="text-[10px] uppercase tracking-wider text-gold-300 bg-gold-400/10 border border-gold-400/30 rounded-full px-1.5 py-0.5">
                   Project
@@ -257,6 +309,19 @@ function TokenCard({
         </div>
       </div>
     </div>
+  );
+}
+
+function VerifiedTick() {
+  return (
+    <span
+      title="Verified by DOGE FORGE"
+      className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-sky-400/15 border border-sky-400/40 text-sky-300 shrink-0"
+    >
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m5 12 5 5L20 7" />
+      </svg>
+    </span>
   );
 }
 
