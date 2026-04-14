@@ -102,7 +102,25 @@ export default function TradePage() {
   const displayedVerified   = sortedVerified.filter(matches);
   const displayedUnverified = unverifiedAll.filter(matches);
 
-  const [view, setView] = useState<"grid" | "list">("list");
+  const [view, setView] = useState<"pro" | "list" | "grid">("pro");
+  const [selectedAddr, setSelectedAddr] = useState<`0x${string}` | null>(null);
+
+  // Default selection: first verified token (fDOGE) once loaded.
+  useEffect(() => {
+    if (!selectedAddr && sortedVerified.length > 0) {
+      setSelectedAddr(sortedVerified[0].address);
+    }
+  }, [sortedVerified, selectedAddr]);
+
+  const selectedToken = useMemo<TileToken | null>(() => {
+    if (!selectedAddr) return null;
+    const lc = selectedAddr.toLowerCase();
+    return (
+      sortedVerified.find((t) => t.address.toLowerCase() === lc)
+      ?? unverifiedAll.find((t) => t.address.toLowerCase() === lc)
+      ?? null
+    );
+  }, [selectedAddr, sortedVerified, unverifiedAll]);
 
   return (
     <div className="space-y-10">
@@ -171,24 +189,37 @@ export default function TradePage() {
             )}
           </div>
           <div className="flex gap-1 p-1 rounded-lg border border-line bg-bg-surface">
-            {(["list", "grid"] as const).map((v) => (
+            {(["pro", "list", "grid"] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={`px-2.5 py-1 rounded-md text-xs transition-colors ${
                   view === v ? "bg-gold-400 text-bg-base font-medium" : "text-ink-muted hover:text-ink"
                 }`}
-                title={v === "list" ? "Dense table view" : "Tile cards"}
+                title={
+                  v === "pro"  ? "Pro trader view — market list + chart + swap"
+                  : v === "list" ? "Dense table view"
+                  :                "Tile cards"
+                }
               >
-                {v === "list" ? "List" : "Grid"}
+                {v === "pro" ? "Pro" : v === "list" ? "List" : "Grid"}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Verified section */}
-      {view === "grid" ? (
+      {/* Pro view — 2-pane trading terminal */}
+      {view === "pro" ? (
+        <ProView
+          verified={displayedVerified}
+          unverified={displayedUnverified}
+          metricsByAddr={metricsByAddr}
+          selected={selectedToken}
+          onSelect={(t) => setSelectedAddr(t.address)}
+          onTrade={(t) => openTrade({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals })}
+        />
+      ) : view === "grid" ? (
         <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {displayedVerified.map((t) => (
             <TokenCard
@@ -213,42 +244,44 @@ export default function TradePage() {
         />
       )}
 
-      {/* Unverified section */}
-      <section>
-        <div className="flex items-baseline justify-between mb-4">
-          <h2 className="font-display text-2xl tracking-tight flex items-center gap-2">
-            Unverified
-            <span className="text-[11px] uppercase tracking-[0.22em] text-ink-muted bg-white/5 border border-line rounded-full px-2 py-0.5">
-              {displayedUnverified.length}
-            </span>
-          </h2>
-          <span className="text-xs text-ink-faint">Auto-discovered. Verify before trading.</span>
-        </div>
-        {displayedUnverified.length === 0 ? (
-          <div className="rounded-xl border border-line bg-bg-surface p-8 text-center text-ink-muted text-sm">
-            {q
-              ? <>No unverified tokens match &ldquo;{query}&rdquo;.</>
-              : <>No unverified tokens discovered yet. The indexer scans new contract deployments on Arc as it runs.</>}
+      {/* Unverified section — hidden in Pro view (it's inside the left pane) */}
+      {view !== "pro" && (
+        <section>
+          <div className="flex items-baseline justify-between mb-4">
+            <h2 className="font-display text-2xl tracking-tight flex items-center gap-2">
+              Unverified
+              <span className="text-[11px] uppercase tracking-[0.22em] text-ink-muted bg-white/5 border border-line rounded-full px-2 py-0.5">
+                {displayedUnverified.length}
+              </span>
+            </h2>
+            <span className="text-xs text-ink-faint">Auto-discovered. Verify before trading.</span>
           </div>
-        ) : view === "grid" ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {displayedUnverified.map((t) => (
-              <UnverifiedCard
-                key={t.address}
-                token={t}
-                onTrade={() => openTrade({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals })}
-              />
-            ))}
-          </div>
-        ) : (
-          <TokenTable
-            rows={displayedUnverified}
-            metricsByAddr={metricsByAddr}
-            onTrade={(t) => openTrade(t)}
-            unverified
-          />
-        )}
-      </section>
+          {displayedUnverified.length === 0 ? (
+            <div className="rounded-xl border border-line bg-bg-surface p-8 text-center text-ink-muted text-sm">
+              {q
+                ? <>No unverified tokens match &ldquo;{query}&rdquo;.</>
+                : <>No unverified tokens discovered yet. The indexer scans new contract deployments on Arc as it runs.</>}
+            </div>
+          ) : view === "grid" ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {displayedUnverified.map((t) => (
+                <UnverifiedCard
+                  key={t.address}
+                  token={t}
+                  onTrade={() => openTrade({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals })}
+                />
+              ))}
+            </div>
+          ) : (
+            <TokenTable
+              rows={displayedUnverified}
+              metricsByAddr={metricsByAddr}
+              onTrade={(t) => openTrade(t)}
+              unverified
+            />
+          )}
+        </section>
+      )}
 
       <TradeModal open={!!tradeToken} onClose={() => setTradeToken(null)} token={tradeToken} />
     </div>
@@ -370,6 +403,202 @@ function TokenCard({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/// Hyperliquid-inspired 2-pane terminal: scrollable market list on the left,
+/// selected-token detail + metrics + swap trigger on the right. Mobile stacks
+/// the panes vertically.
+function ProView({
+  verified, unverified, metricsByAddr, selected, onSelect, onTrade,
+}: {
+  verified: TileToken[];
+  unverified: TileToken[];
+  metricsByAddr: Record<string, TokenMetrics | undefined>;
+  selected: TileToken | null;
+  onSelect: (t: TileToken) => void;
+  onTrade: (t: TileToken) => void;
+}) {
+  return (
+    <div className="grid lg:grid-cols-[280px_1fr] gap-4 min-h-[600px]">
+      {/* Left: market list */}
+      <aside className="rounded-xl border border-line bg-bg-surface overflow-hidden flex flex-col">
+        <MarketListGroup title="Verified" tokens={verified} metricsByAddr={metricsByAddr} selected={selected} onSelect={onSelect} showTick />
+        <MarketListGroup title="Unverified" tokens={unverified} metricsByAddr={metricsByAddr} selected={selected} onSelect={onSelect} subdued />
+      </aside>
+
+      {/* Right: detail + swap trigger */}
+      <section className="rounded-xl border border-line bg-bg-surface p-6 flex flex-col gap-6">
+        {selected ? (
+          <ProDetail token={selected} metrics={metricsByAddr[selected.address.toLowerCase()]} onTrade={() => onTrade(selected)} />
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-ink-muted text-sm">
+            Select a market to view details.
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function MarketListGroup({
+  title, tokens, metricsByAddr, selected, onSelect, showTick, subdued,
+}: {
+  title: string;
+  tokens: TileToken[];
+  metricsByAddr: Record<string, TokenMetrics | undefined>;
+  selected: TileToken | null;
+  onSelect: (t: TileToken) => void;
+  showTick?: boolean;
+  subdued?: boolean;
+}) {
+  if (tokens.length === 0) return null;
+  return (
+    <div className="border-b border-line last:border-0">
+      <div className="px-3 py-2 text-[10px] uppercase tracking-[0.22em] text-ink-faint bg-bg-base/40 sticky top-0">
+        {title} · {tokens.length}
+      </div>
+      <ul className="max-h-[400px] overflow-y-auto">
+        {tokens.map((t) => {
+          const m = metricsByAddr[t.address.toLowerCase()];
+          const change = m?.priceChange24hPct ?? null;
+          const changeClass =
+            change === null ? "text-ink-faint"
+            : change > 0 ? "text-emerald-300"
+            : change < 0 ? "text-red-300"
+            : "text-ink-muted";
+          const isSelected = selected?.address.toLowerCase() === t.address.toLowerCase();
+          return (
+            <li key={t.address}>
+              <button
+                onClick={() => onSelect(t)}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors border-l-2 ${
+                  isSelected
+                    ? "bg-gold-400/10 border-gold-400"
+                    : "border-transparent hover:bg-bg-raised"
+                } ${subdued ? "opacity-75" : ""}`}
+              >
+                <TokenIcon token={t} size={24} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm font-medium text-ink truncate">{t.symbol}</span>
+                    {showTick && <VerifiedTick />}
+                  </div>
+                  <div className="text-[10px] text-ink-faint tabular truncate">
+                    {fmtUsd(m?.priceUsd ?? null)}
+                  </div>
+                </div>
+                <div className={`text-[10px] tabular shrink-0 ${changeClass}`}>
+                  {fmtPct(change)}
+                </div>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function ProDetail({
+  token, metrics, onTrade,
+}: {
+  token: TileToken;
+  metrics?: TokenMetrics;
+  onTrade: () => void;
+}) {
+  const change = metrics?.priceChange24hPct ?? null;
+  const changeClass =
+    change === null ? "text-ink-faint"
+    : change > 0 ? "text-emerald-300"
+    : change < 0 ? "text-red-300"
+    : "text-ink-muted";
+
+  return (
+    <>
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <TokenIcon token={token} size={48} />
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="font-display text-3xl tracking-tight text-ink">{token.symbol}</h2>
+            {token.verified && <VerifiedTick />}
+            {token.kind === "project" && (
+              <span className="text-[10px] uppercase tracking-wider text-gold-300 bg-gold-400/10 border border-gold-400/30 rounded-full px-1.5 py-0.5">
+                Project
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-ink-muted">{token.name}</div>
+        </div>
+        <div className="ml-auto text-right">
+          <div className="font-display text-3xl tabular text-ink">{fmtUsd(metrics?.priceUsd ?? null)}</div>
+          <div className={`text-xs tabular ${changeClass}`}>{fmtPct(change)} (24h)</div>
+        </div>
+      </div>
+
+      {/* Chart placeholder — swap for lightweight-charts in a future pass */}
+      <div className="relative h-48 sm:h-64 rounded-lg border border-line bg-bg-base overflow-hidden">
+        <div className="absolute inset-0 flex items-center justify-center text-ink-faint text-xs">
+          Price chart — coming soon
+        </div>
+        {/* Faint diagonal pattern to suggest a chart canvas */}
+        <svg className="absolute inset-0 w-full h-full opacity-[0.04]" preserveAspectRatio="none" viewBox="0 0 100 100">
+          <defs>
+            <pattern id="gridPattern" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
+              <path d="M 10 0 L 0 0 0 10" fill="none" stroke="currentColor" strokeWidth="0.2" />
+            </pattern>
+          </defs>
+          <rect width="100" height="100" fill="url(#gridPattern)" />
+        </svg>
+      </div>
+
+      {/* Metrics strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-line rounded-lg overflow-hidden">
+        <MetricCell label="Market Cap"   value={fmtUsd(metrics?.marketCapUsd ?? null)} />
+        <MetricCell label="FDV"          value={fmtUsd(metrics?.fdvUsd ?? null)} />
+        <MetricCell label="Liquidity"    value={fmtUsd(metrics?.liquidityUsd ?? null)} />
+        <MetricCell label="24h Volume"   value={fmtUsd(metrics?.volume24hUsd ?? null)} />
+        <MetricCell label="Circ. Supply" value={fmtSupply(metrics?.circulatingSupply ?? null)} />
+        <MetricCell label="Total Supply" value={fmtSupply(metrics?.totalSupply ?? null)} />
+        <MetricCell label="Contract"     value={`${token.address.slice(0, 6)}…${token.address.slice(-4)}`} mono />
+        <MetricCell
+          label="Explorer"
+          value={
+            <a
+              href={explorerLink(token.address)}
+              target="_blank" rel="noreferrer"
+              className="text-gold-300 hover:text-gold-200 transition-colors"
+            >
+              Open ↗
+            </a>
+          }
+        />
+      </div>
+
+      {/* Trade CTA */}
+      {token.kind !== "native-stable" ? (
+        <button
+          onClick={onTrade}
+          className="w-full px-4 py-4 rounded-lg bg-gold-400 text-bg-base font-semibold text-base hover:bg-gold-300 transition-colors"
+        >
+          Trade {token.symbol}
+        </button>
+      ) : (
+        <div className="w-full px-4 py-4 rounded-lg border border-line text-center text-sm text-ink-muted">
+          Native stablecoin · used as the quote asset for every pair.
+        </div>
+      )}
+    </>
+  );
+}
+
+function MetricCell({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div className="p-3 bg-bg-surface">
+      <div className="text-[10px] uppercase tracking-[0.18em] text-ink-faint">{label}</div>
+      <div className={`mt-1 text-sm text-ink ${mono ? "tabular" : ""}`}>{value}</div>
     </div>
   );
 }
