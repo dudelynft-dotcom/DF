@@ -80,6 +80,10 @@ export function PriceChart({ pair, interval = "1h", className }: Props) {
     if (!series) return;
     if (!pair) {
       series.setData([]);
+      // Reset autoscale so next token starts fresh instead of inheriting the
+      // previous token's price range.
+      chartRef.current?.priceScale("right").applyOptions({ autoScale: true });
+      chartRef.current?.timeScale().resetTimeScale();
       setState("idle");
       return;
     }
