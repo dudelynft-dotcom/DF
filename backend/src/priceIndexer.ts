@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createPublicClient, http, parseAbiItem, decodeEventLog } from "viem";
+import { createPublicClient, http, parseAbiItem, decodeEventLog, parseAbi } from "viem";
 import { db } from "./db.js";
 
 /**
@@ -30,7 +30,36 @@ const swapEvent = parseAbiItem(
   "event Swap(address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)"
 );
 
+const pairAbi   = parseAbi([
+  "function token0() view returns (address)",
+  "function token1() view returns (address)",
+]);
+const erc20Abi  = parseAbi([
+  "function decimals() view returns (uint8)",
+]);
+
 const client = createPublicClient({ transport: http(RPC) });
+
+// Decimals of token0/token1 for this pair. Read once at startup so every
+// price can be expressed in "token1 human units per token0 human unit" —
+// i.e. for our fDOGE/USDC pair, a price close to $0.01 is recorded as 0.01,
+// not 0.01e12.
+let token0Decimals = 18;
+let token1Decimals = 18;
+
+async function loadPairMetadata() {
+  const [t0, t1] = await Promise.all([
+    client.readContract({ address: PAIR_ADDR as `0x${string}`, abi: pairAbi, functionName: "token0" }),
+    client.readContract({ address: PAIR_ADDR as `0x${string}`, abi: pairAbi, functionName: "token1" }),
+  ]);
+  const [d0, d1] = await Promise.all([
+    client.readContract({ address: t0, abi: erc20Abi, functionName: "decimals" }),
+    client.readContract({ address: t1, abi: erc20Abi, functionName: "decimals" }),
+  ]);
+  token0Decimals = Number(d0);
+  token1Decimals = Number(d1);
+  console.log(`[price] token0=${t0} (${token0Decimals}d), token1=${t1} (${token1Decimals}d)`);
+}
 
 function getCursor(): bigint {
   const row = db.prepare("SELECT last_block FROM price_cursor WHERE pair = ?").get(PAIR_ADDR) as { last_block?: number } | undefined;
@@ -49,14 +78,19 @@ const insertSwap = db.prepare(
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 );
 
+/// Price of token0 expressed in token1 human units (e.g. USDC per fDOGE).
+/// Raw wei-amounts are decimal-adjusted to human units before dividing so
+/// the output is a real float price, not a 10^12-off integer ratio.
 function computePrice(a0in: bigint, a1in: bigint, a0out: bigint, a1out: bigint): number {
-  // token0 -> token1 swap: paid a0in token0, received a1out token1. Price = a1out / a0in.
-  // token1 -> token0 swap: paid a1in token1, received a0out token0. Price = a1in / a0out.
+  const scale0 = Math.pow(10, token0Decimals);
+  const scale1 = Math.pow(10, token1Decimals);
   if (a0in > 0n && a1out > 0n) {
-    return Number(a1out) / Number(a0in);
+    // token0 -> token1 swap
+    return (Number(a1out) / scale1) / (Number(a0in) / scale0);
   }
   if (a1in > 0n && a0out > 0n) {
-    return Number(a1in) / Number(a0out);
+    // token1 -> token0 swap
+    return (Number(a1in) / scale1) / (Number(a0out) / scale0);
   }
   return 0;
 }
@@ -103,6 +137,7 @@ async function tick() {
 
 async function main() {
   console.log(`[price] watching pair ${PAIR_ADDR} on ${RPC}, poll ${POLL_MS}ms, range ${RANGE} blocks`);
+  await loadPairMetadata();
   // eslint-disable-next-line no-constant-condition
   while (true) {
     try { await tick(); }

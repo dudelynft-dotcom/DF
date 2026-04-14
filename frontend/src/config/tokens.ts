@@ -52,12 +52,12 @@ const RAW_CURATED: Array<CuratedToken | null> = [
     description: "Yield-bearing USD stablecoin (Hashnote), predeployed on Arc.",
     iconUrl: "https://assets.coingecko.com/coins/images/28557/small/HASH_202311.png",
   },
-  // UnitFlow's wrapped USDC (paired against most of their tokens).
+  // UnitFlow's wrapped USDC — 18 decimals (verified on-chain).
   {
     address: addresses.wusdc,
     symbol:  "WUSDC",
     name:    "Wrapped USDC",
-    decimals: 6,
+    decimals: 18,
     kind:    "stablecoin",
     description: "UnitFlow's wrapped USDC for AMM pool routing.",
     iconUrl: "https://assets.coingecko.com/coins/images/6319/small/usdc.png",

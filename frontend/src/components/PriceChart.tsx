@@ -35,6 +35,8 @@ export function PriceChart({ pair, interval = "1h", className }: Props) {
       layout: {
         background: { color: "transparent" },
         textColor:  "#a09682",
+        // Hide the "TV" attribution logo introduced in v5.
+        attributionLogo: false,
       },
       grid: {
         vertLines: { color: "#1b1b1d" },
@@ -125,7 +127,7 @@ export function PriceChart({ pair, interval = "1h", className }: Props) {
         <div className="absolute inset-0 flex items-center justify-center text-ink-faint text-xs pointer-events-none">
           {state === "loading" ? "Loading chart…"
             : state === "empty" ? "No swap history yet for this market."
-            : "Select a market."}
+            : "Chart not available for this market."}
         </div>
       )}
     </div>
