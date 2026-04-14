@@ -86,6 +86,35 @@ export const unitflowRouterAbi = [
   },
 ] as const;
 
+/// DOGE FORGE's own aggregator — takes a platform fee in the input token,
+/// forwards the rest to the underlying UniV2 router. Interface is nearly
+/// identical to UnitFlow's, plus `getAmountsOutAfterFee` for correct quotes.
+export const aggregatorAbi = [
+  {
+    type: "function", name: "feeBps", stateMutability: "view",
+    inputs: [], outputs: [{ type: "uint16" }],
+  },
+  {
+    type: "function", name: "getAmountsOutAfterFee", stateMutability: "view",
+    inputs: [
+      { name: "amountIn", type: "uint256" },
+      { name: "path",     type: "address[]" },
+    ],
+    outputs: [{ type: "uint256[]" }],
+  },
+  {
+    type: "function", name: "swapExactTokensForTokens", stateMutability: "nonpayable",
+    inputs: [
+      { name: "amountIn",     type: "uint256" },
+      { name: "amountOutMin", type: "uint256" },
+      { name: "path",         type: "address[]" },
+      { name: "to",           type: "address" },
+      { name: "deadline",     type: "uint256" },
+    ],
+    outputs: [{ type: "uint256" }],
+  },
+] as const;
+
 /// Subset of Tempo's enshrined IStablecoinDEX precompile that we actually use.
 /// Full interface: https://github.com/tempoxyz/tempo-std/blob/main/src/interfaces/IStablecoinDEX.sol
 export const stablecoinDexAbi = [

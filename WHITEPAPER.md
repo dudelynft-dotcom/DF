@@ -914,9 +914,12 @@ flowchart LR
     NM[Names claims] -->|100 percent of fee| LP
     TF[fDOGE transfer fee] -->|0.10 percent on every transfer| TR
     LPF[Pair LP fee] -->|0.30 percent on every swap| LP
+    AGG[ForgeAggregator] -->|0.10 percent on non-fDOGE swaps| LP
 ```
 
-The split is intentional: **liquidity gets 100% of identity revenue and 95% of mining revenue**; treasury gets 5% of mining and the residual transfer fee revenue. Liquidity is treated as the primary public good of the protocol; treasury is an operational reserve.
+The split is intentional: **liquidity gets 100% of identity revenue, 95% of mining revenue, and 100% of aggregator fees**; treasury gets 5% of mining and the residual transfer fee revenue. Liquidity is treated as the primary public good of the protocol; treasury is an operational reserve.
+
+When users swap a non-fDOGE token (e.g. EURC ↔ USDC) the trade routes through `ForgeAggregator`, which skims **0.10%** of the input token, forwards it to `LiquidityManager`, and dispatches the remaining 99.90% into the underlying UniswapV2-compatible router (UnitFlow V2.5 on Arc). fDOGE swaps bypass the aggregator entirely — they trade directly against `TdogePair` and the protocol earns the standard 0.30% LP fee instead.
 
 ### 15.2 Fee Routing
 

@@ -45,14 +45,19 @@ export const addresses = {
   router:           process.env.NEXT_PUBLIC_ROUTER_ADDRESS as `0x${string}`,
   names:            process.env.NEXT_PUBLIC_NAMES_ADDRESS  as `0x${string}`,
 
-  // UnitFlow V2.5 — third-party DEX on Arc. We route non-fDOGE token swaps
-  // through their liquidity; our TdogePair remains the only venue for fDOGE.
+  // UnitFlow V2.5 — third-party DEX on Arc. Our aggregator wraps their router
+  // to skim a 0.10% platform fee to the LiquidityManager.
   unitflowFactory: (process.env.NEXT_PUBLIC_UNITFLOW_FACTORY
     ?? "0xd67F63A4F26a497b364d1C82e6747Aec8B5743a5") as `0x${string}`,
   unitflowRouter:  (process.env.NEXT_PUBLIC_UNITFLOW_ROUTER
     ?? "0x4AA8c7Ac458479d9A4FA5c1481e03061ac76824A") as `0x${string}`,
   wusdc:           (process.env.NEXT_PUBLIC_WUSDC_ADDRESS
     ?? "0x911b4000D3422F482F4062a913885f7b035382Df") as `0x${string}`,
+
+  // DOGE FORGE fee-aware aggregator. If unset we fall back to direct UnitFlow
+  // (no platform fee collected). Set once deploy-aggregator.ps1 has run.
+  aggregator:      (process.env.NEXT_PUBLIC_AGGREGATOR_ADDRESS
+    ?? "0x0000000000000000000000000000000000000000") as `0x${string}`,
 
   // Backwards-compat shims — existing components still reference these names.
   // `pathUSD` aliases Arc USDC. `stablecoinDex` is a zero-address placeholder

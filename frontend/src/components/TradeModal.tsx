@@ -6,7 +6,10 @@ import { formatUnits, parseUnits } from "viem";
 import { addresses, tempo } from "@/config/chain";
 import { CURATED_TOKENS } from "@/config/tokens";
 import { erc20Abi } from "@/lib/abis";
-import { routerAbi, unitflowFactoryAbi, unitflowRouterAbi } from "@/lib/dexAbis";
+import { routerAbi, unitflowFactoryAbi, unitflowRouterAbi, aggregatorAbi } from "@/lib/dexAbis";
+
+const ZERO = "0x0000000000000000000000000000000000000000";
+const HAS_AGGREGATOR = addresses.aggregator && addresses.aggregator.toLowerCase() !== ZERO;
 import { sendTx, prettifyError } from "@/lib/tx";
 import { useToast } from "./Toaster";
 
@@ -86,7 +89,7 @@ export function TradeModal({
 
   const spender =
     effectiveRoute === "tdoge-amm" ? addresses.router :
-    effectiveRoute === "unitflow"  ? addresses.unitflowRouter :
+    effectiveRoute === "unitflow"  ? (HAS_AGGREGATOR ? addresses.aggregator : addresses.unitflowRouter) :
     undefined;
 
   // Balances + allowance on the "from" token
@@ -112,8 +115,12 @@ export function TradeModal({
     chainId: tempo.id,
     query: { enabled: open && effectiveRoute === "tdoge-amm" && parsedIn > 0n, refetchInterval: 4000 },
   });
+  // When the aggregator is deployed, quote via getAmountsOutAfterFee so the
+  // user sees the post-fee price; otherwise hit UnitFlow directly.
   const { data: unitflowQuote } = useReadContract({
-    address: addresses.unitflowRouter, abi: unitflowRouterAbi, functionName: "getAmountsOut",
+    address: HAS_AGGREGATOR ? addresses.aggregator : addresses.unitflowRouter,
+    abi: HAS_AGGREGATOR ? aggregatorAbi : unitflowRouterAbi,
+    functionName: HAS_AGGREGATOR ? "getAmountsOutAfterFee" : "getAmountsOut",
     args: from && to ? [parsedIn, [from.address, to.address] as const] : undefined,
     chainId: tempo.id,
     query: { enabled: open && effectiveRoute === "unitflow" && parsedIn > 0n, refetchInterval: 4000 },
@@ -167,11 +174,14 @@ export function TradeModal({
         `${side === "buy" ? "Buying" : "Selling"} ${token.symbol}`,
       );
     } else if (effectiveRoute === "unitflow") {
+      // Route through aggregator (for fee skim) when available, else direct.
       doTx("swap",
-        { address: addresses.unitflowRouter, abi: unitflowRouterAbi, functionName: "swapExactTokensForTokens",
-          args: [parsedIn, minOut, [from.address, to.address] as const, address, deadline],
-        },
-        `${side === "buy" ? "Buying" : "Selling"} ${token.symbol} via UnitFlow`,
+        HAS_AGGREGATOR
+          ? { address: addresses.aggregator, abi: aggregatorAbi, functionName: "swapExactTokensForTokens",
+              args: [parsedIn, minOut, [from.address, to.address] as const, address, deadline] }
+          : { address: addresses.unitflowRouter, abi: unitflowRouterAbi, functionName: "swapExactTokensForTokens",
+              args: [parsedIn, minOut, [from.address, to.address] as const, address, deadline] },
+        `${side === "buy" ? "Buying" : "Selling"} ${token.symbol}`,
       );
     }
   }
@@ -256,7 +266,7 @@ export function TradeModal({
           <Row label="Route">
             <span className="text-ink-muted">
               {effectiveRoute === "tdoge-amm" ? "DOGE FORGE AMM"
-                : effectiveRoute === "unitflow" ? "UnitFlow V2.5"
+                : effectiveRoute === "unitflow" ? (HAS_AGGREGATOR ? "DOGE FORGE → UnitFlow (0.10% fee)" : "UnitFlow V2.5")
                 : "No route"}
             </span>
           </Row>
