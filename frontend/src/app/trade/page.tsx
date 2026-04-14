@@ -155,7 +155,11 @@ export default function TradePage() {
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {unverifiedAll.map((t) => (
-              <UnverifiedCard key={t.address} token={t} />
+              <UnverifiedCard
+                key={t.address}
+                token={t}
+                onTrade={() => openTrade({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals })}
+              />
             ))}
           </div>
         )}
@@ -245,6 +249,7 @@ function TokenCard({
             <button
               onClick={onTrade}
               className="px-3 py-1.5 rounded-md bg-gold-400 text-bg-base text-xs font-semibold hover:bg-gold-300 transition-colors"
+              title="Routes through DOGE FORGE AMM (fDOGE) or UnitFlow V2.5 (others)"
             >
               Trade
             </button>
@@ -255,7 +260,7 @@ function TokenCard({
   );
 }
 
-function UnverifiedCard({ token }: { token: TileToken }) {
+function UnverifiedCard({ token, onTrade }: { token: TileToken; onTrade: () => void }) {
   return (
     <div className="rounded-xl border border-line bg-bg-surface p-5 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
@@ -286,10 +291,17 @@ function UnverifiedCard({ token }: { token: TileToken }) {
           <a
             href={explorerLink(token.address)}
             target="_blank" rel="noreferrer"
-            className="px-3 py-1.5 rounded-md border border-gold-400/60 text-ink text-xs hover:bg-gold-400/10 transition-colors"
+            className="px-2.5 py-1.5 rounded-md border border-line text-[11px] text-ink-muted hover:text-ink hover:border-gold-400/60 transition-colors"
           >
             View ↗
           </a>
+          <button
+            onClick={onTrade}
+            className="px-3 py-1.5 rounded-md border border-gold-400/60 text-ink text-xs hover:bg-gold-400/10 transition-colors"
+            title="Attempts to route via UnitFlow V2.5; will show 'no liquidity' if no pair exists"
+          >
+            Trade
+          </button>
         </div>
       </div>
     </div>

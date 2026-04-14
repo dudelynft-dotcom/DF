@@ -6,7 +6,7 @@ import { formatUnits, parseUnits } from "viem";
 import { addresses, tempo } from "@/config/chain";
 import { CURATED_TOKENS } from "@/config/tokens";
 import { erc20Abi } from "@/lib/abis";
-import { routerAbi, stablecoinDexAbi } from "@/lib/dexAbis";
+import { routerAbi, unitflowFactoryAbi, unitflowRouterAbi } from "@/lib/dexAbis";
 import { sendTx, prettifyError } from "@/lib/tx";
 import { useToast } from "./Toaster";
 
@@ -17,16 +17,18 @@ export type TradeToken = {
   decimals: number;
 };
 
-type Route = "tdoge-amm" | "stablecoin-dex" | "none";
+type Route = "tdoge-amm" | "unitflow" | "none";
 
-function routeFor(a: string, b: string): Route {
+/// Decide which DEX to route through. fDOGE always uses our own AMM; any
+/// non-fDOGE pair falls back to UnitFlow V2.5. We confirm UnitFlow has a
+/// pair on-chain via `useUnitflowPairExists` before enabling the trade.
+function routeFor(tokenAddr: string): Route {
   const doge = addresses.doge.toLowerCase();
-  if (a.toLowerCase() === doge || b.toLowerCase() === doge) return "tdoge-amm";
-  const stableSet = new Set(
-    CURATED_TOKENS.filter((t) => t.kind !== "project").map((t) => t.address.toLowerCase())
-  );
-  if (stableSet.has(a.toLowerCase()) && stableSet.has(b.toLowerCase())) return "stablecoin-dex";
-  return "none";
+  const usdc = addresses.usdc.toLowerCase();
+  const t = tokenAddr.toLowerCase();
+  if (t === doge) return "tdoge-amm";
+  if (t === usdc) return "none"; // can't trade USDC against itself
+  return "unitflow";
 }
 
 export function TradeModal({
@@ -68,12 +70,23 @@ export function TradeModal({
   const from = side === "buy" ? { address: quote.address, symbol: quote.symbol, decimals: quote.decimals } : token;
   const to   = side === "buy" ? token : { address: quote.address, symbol: quote.symbol, decimals: quote.decimals };
 
-  const route = token ? routeFor(token.address, quote.address) : "none";
+  const route = token ? routeFor(token.address) : "none";
   const parsedIn = from && amount ? safeParse(amount, from.decimals) : 0n;
 
+  // For UnitFlow we need to confirm a pair actually exists for token/USDC.
+  const { data: unitflowPairAddr } = useReadContract({
+    address: addresses.unitflowFactory, abi: unitflowFactoryAbi, functionName: "getPair",
+    args: token && route === "unitflow" ? [token.address, addresses.usdc] : undefined,
+    chainId: tempo.id,
+    query: { enabled: open && route === "unitflow" && !!token, refetchInterval: 30_000 },
+  });
+  const hasUnitflowPair = (unitflowPairAddr as `0x${string}` | undefined)
+    && (unitflowPairAddr as string).toLowerCase() !== "0x0000000000000000000000000000000000000000";
+  const effectiveRoute: Route = route === "unitflow" && !hasUnitflowPair ? "none" : route;
+
   const spender =
-    route === "tdoge-amm"     ? addresses.router :
-    route === "stablecoin-dex"? addresses.stablecoinDex :
+    effectiveRoute === "tdoge-amm" ? addresses.router :
+    effectiveRoute === "unitflow"  ? addresses.unitflowRouter :
     undefined;
 
   // Balances + allowance on the "from" token
@@ -97,19 +110,22 @@ export function TradeModal({
     address: addresses.router, abi: routerAbi, functionName: "quote",
     args: from ? [from.address, parsedIn] : undefined,
     chainId: tempo.id,
-    query: { enabled: open && route === "tdoge-amm" && parsedIn > 0n, refetchInterval: 4000 },
+    query: { enabled: open && effectiveRoute === "tdoge-amm" && parsedIn > 0n, refetchInterval: 4000 },
   });
-  const { data: dexQuote } = useReadContract({
-    address: addresses.stablecoinDex, abi: stablecoinDexAbi, functionName: "quoteSwapExactAmountIn",
-    args: from && to ? [from.address, to.address, parsedIn] : undefined,
+  const { data: unitflowQuote } = useReadContract({
+    address: addresses.unitflowRouter, abi: unitflowRouterAbi, functionName: "getAmountsOut",
+    args: from && to ? [parsedIn, [from.address, to.address] as const] : undefined,
     chainId: tempo.id,
-    query: { enabled: open && route === "stablecoin-dex" && parsedIn > 0n, refetchInterval: 4000 },
+    query: { enabled: open && effectiveRoute === "unitflow" && parsedIn > 0n, refetchInterval: 4000 },
   });
   const quoteOut = useMemo(() => {
-    if (route === "tdoge-amm")      return ammQuote as bigint | undefined;
-    if (route === "stablecoin-dex") return dexQuote as bigint | undefined;
+    if (effectiveRoute === "tdoge-amm") return ammQuote as bigint | undefined;
+    if (effectiveRoute === "unitflow") {
+      const arr = unitflowQuote as readonly bigint[] | undefined;
+      return arr && arr.length > 0 ? arr[arr.length - 1] : undefined;
+    }
     return undefined;
-  }, [route, ammQuote, dexQuote]);
+  }, [effectiveRoute, ammQuote, unitflowQuote]);
 
   const minOut = quoteOut ? quoteOut - (quoteOut * BigInt(slippageBps)) / 10_000n : 0n;
   const fb = fromBal as bigint | undefined;
@@ -142,19 +158,20 @@ export function TradeModal({
 
   function onSwap() {
     if (!address || !from || !to || !parsedIn || !token) return;
-    if (route === "tdoge-amm") {
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+    if (effectiveRoute === "tdoge-amm") {
       doTx("swap",
         { address: addresses.router, abi: routerAbi, functionName: "swapExactIn",
-          args: [from.address, parsedIn, minOut, address, BigInt(Math.floor(Date.now()/1000) + 300)],
+          args: [from.address, parsedIn, minOut, address, deadline],
         },
         `${side === "buy" ? "Buying" : "Selling"} ${token.symbol}`,
       );
-    } else if (route === "stablecoin-dex") {
+    } else if (effectiveRoute === "unitflow") {
       doTx("swap",
-        { address: addresses.stablecoinDex, abi: stablecoinDexAbi, functionName: "swapExactAmountIn",
-          args: [from.address, to.address, parsedIn, minOut],
+        { address: addresses.unitflowRouter, abi: unitflowRouterAbi, functionName: "swapExactTokensForTokens",
+          args: [parsedIn, minOut, [from.address, to.address] as const, address, deadline],
         },
-        `Swapping ${from.symbol} for ${to.symbol}`,
+        `${side === "buy" ? "Buying" : "Selling"} ${token.symbol} via UnitFlow`,
       );
     }
   }
@@ -238,8 +255,8 @@ export function TradeModal({
         <div className="mx-6 mt-5 rounded-lg border border-line bg-bg-base p-3 space-y-2 text-xs">
           <Row label="Route">
             <span className="text-ink-muted">
-              {route === "tdoge-amm" ? "DOGE FORGE AMM"
-                : route === "stablecoin-dex" ? "External DEX"
+              {effectiveRoute === "tdoge-amm" ? "DOGE FORGE AMM"
+                : effectiveRoute === "unitflow" ? "UnitFlow V2.5"
                 : "No route"}
             </span>
           </Row>

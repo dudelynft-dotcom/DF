@@ -50,6 +50,42 @@ export const routerAbi = [
   },
 ] as const;
 
+/// UnitFlow V2.5 — Uniswap V2-compatible DEX on Arc. We use it to route swaps
+/// for any non-fDOGE token pair (e.g. USDC/EURC, USDC/WUSDC).
+export const unitflowFactoryAbi = [
+  {
+    type: "function", name: "getPair", stateMutability: "view",
+    inputs: [{ type: "address" }, { type: "address" }],
+    outputs: [{ name: "pair", type: "address" }],
+  },
+  {
+    type: "function", name: "allPairsLength", stateMutability: "view",
+    inputs: [], outputs: [{ type: "uint256" }],
+  },
+] as const;
+
+export const unitflowRouterAbi = [
+  {
+    type: "function", name: "getAmountsOut", stateMutability: "view",
+    inputs: [
+      { name: "amountIn", type: "uint256" },
+      { name: "path",     type: "address[]" },
+    ],
+    outputs: [{ type: "uint256[]" }],
+  },
+  {
+    type: "function", name: "swapExactTokensForTokens", stateMutability: "nonpayable",
+    inputs: [
+      { name: "amountIn",     type: "uint256" },
+      { name: "amountOutMin", type: "uint256" },
+      { name: "path",         type: "address[]" },
+      { name: "to",           type: "address" },
+      { name: "deadline",     type: "uint256" },
+    ],
+    outputs: [{ type: "uint256[]" }],
+  },
+] as const;
+
 /// Subset of Tempo's enshrined IStablecoinDEX precompile that we actually use.
 /// Full interface: https://github.com/tempoxyz/tempo-std/blob/main/src/interfaces/IStablecoinDEX.sol
 export const stablecoinDexAbi = [
