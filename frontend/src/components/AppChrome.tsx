@@ -51,6 +51,15 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              <a
+                href="https://faucet.circle.com"
+                target="_blank"
+                rel="noreferrer"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-line text-xs text-ink-muted hover:text-gold-300 hover:border-gold-400/60 transition-colors"
+                title="Get USDC on Arc Testnet from Circle"
+              >
+                Faucet ↗
+              </a>
               <ConnectButton />
               {/* Mobile hamburger */}
               <button
