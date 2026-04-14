@@ -91,7 +91,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
                   onClick={() => setMenuOpen(false)}
                   className="px-2 py-3 text-sm text-gold-300 hover:text-gold-200"
                 >
-                  TDOGE Paper
+                  fDOGE Paper
                 </Link>
               </div>
             </nav>
@@ -103,12 +103,12 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
 
       <footer className="border-t border-line mt-16 sm:mt-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-[11px] sm:text-xs text-ink-faint flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <span>DOGE FORGE · Tempo Chain</span>
+          <span>DOGE FORGE · Arc Network</span>
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-5">
             <Link href="/TDOGEPAPER" className="hover:text-gold-300 transition-colors">
-              TDOGE Paper
+              fDOGE Paper
             </Link>
-            <span className="tabular">TDOGE · 210M initial cap · 0.1% transfer fee</span>
+            <span className="tabular">fDOGE · 210M initial cap · 0.1% transfer fee</span>
           </div>
         </div>
       </footer>

@@ -45,7 +45,7 @@ export default function MinePage() {
   }
 
   const miner = { address: addresses.miner, abi: minerAbi, chainId: tempo.id } as const;
-  const usd   = { address: addresses.pathUSD, abi: erc20Abi, chainId: tempo.id } as const;
+  const usd   = { address: addresses.usdc, abi: erc20Abi, chainId: tempo.id } as const;
 
   // Global reads
   const { data: globals, refetch: refetchGlobals } = useReadContracts({
@@ -172,30 +172,30 @@ export default function MinePage() {
           <div>
             <div className="text-sm font-medium text-red-300">Your wallet is on the wrong network</div>
             <div className="text-xs text-red-200/70 mt-0.5">
-              DOGE FORGE runs on Tempo Testnet (chain {tempo.id}). Switch to submit transactions.
+              DOGE FORGE runs on Arc Testnet (chain {tempo.id}). Switch to submit transactions.
             </div>
           </div>
           <button
             onClick={switchToTempo} disabled={switching}
             className="px-4 py-2 rounded-md bg-gold-400 text-bg-base text-sm font-medium hover:bg-gold-300 transition-colors disabled:opacity-40 whitespace-nowrap"
           >
-            {switching ? "Switching…" : "Switch to Tempo"}
+            {switching ? "Switching…" : "Switch to Arc"}
           </button>
         </div>
       )}
 
       {/* Protocol-wide */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-px bg-line rounded-xl overflow-hidden">
-        <Stat label="TVL"               value={tvl !== undefined ? fmtUsd(tvl) : "-"} unit="pathUSD locked across protocol" emphasis />
+        <Stat label="TVL"               value={tvl !== undefined ? fmtUsd(tvl) : "-"} unit="USDC locked across protocol" emphasis />
         <Stat label="Current Phase"     value={phase ? toRoman(Number(phase[0]) + 1) : "-"} />
-        <Stat label="Phase Rate"        value={phase ? fmtDoge(phase[1]) : "-"} unit="TDOGE / pathUSD" />
+        <Stat label="Phase Rate"        value={phase ? fmtDoge(phase[1]) : "-"} unit="fDOGE / USDC" />
         <Stat label="Conversion Rate"   value={convRate ? `${(Number(convRate) / 100).toFixed(2)}%` : "-"} unit="per day" />
       </section>
 
       {/* Your wallet */}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-line rounded-xl overflow-hidden">
         <Stat label="Open Positions"    value={`${openPositions.length}${maxPositions ? ` / ${maxPositions}` : ""}`} unit="per wallet" />
-        <Stat label="Committed"         value={cap ? `${fmtUsd(committedSum)} / ${fmtUsd(cap)}` : "-"} unit="pathUSD active" />
+        <Stat label="Committed"         value={cap ? `${fmtUsd(committedSum)} / ${fmtUsd(cap)}` : "-"} unit="USDC active" />
         <Stat label="Your Score"        value={score !== undefined ? fmtScore(score) : "-"} unit="miner points" />
       </section>
 
@@ -207,7 +207,7 @@ export default function MinePage() {
             <h2 className="font-display text-2xl tracking-tight mt-1">Open a position</h2>
           </div>
           <div className="text-sm text-ink-muted tabular">
-            Wallet: {bal !== undefined ? `${fmtUsd(bal)} pathUSD` : "-"}
+            Wallet: {bal !== undefined ? `${fmtUsd(bal)} USDC` : "-"}
           </div>
         </div>
 
@@ -246,8 +246,8 @@ export default function MinePage() {
             <button
               disabled={disableCommit}
               onClick={() => doTx("approve",
-                { address: addresses.pathUSD, abi: erc20Abi, functionName: "approve", args: [addresses.miner, parsed] },
-                `Approving ${amount} pathUSD`
+                { address: addresses.usdc, abi: erc20Abi, functionName: "approve", args: [addresses.miner, parsed] },
+                `Approving ${amount} USDC`
               )}
               className="px-6 rounded-md border border-gold-400/60 text-ink hover:bg-gold-400/10 transition-colors disabled:opacity-40"
             >
@@ -272,7 +272,7 @@ export default function MinePage() {
         )}
         {exceedsCap && amount && !exceedsWallet && (
           <p className="mt-3 text-xs text-red-300">
-            Would exceed per-wallet cap ({fmtUsd(cap!)} pathUSD total across open positions).
+            Would exceed per-wallet cap ({fmtUsd(cap!)} USDC total across open positions).
           </p>
         )}
         {reachedMaxPositions && (
@@ -282,7 +282,7 @@ export default function MinePage() {
         )}
 
         <p className="mt-4 text-xs text-ink-faint leading-relaxed max-w-2xl">
-          Commitment tiers (by position size): {"<"}100 pathUSD = 1.00×. 100 to 999 = 1.10×. 1,000 to 4,999 = 1.25×. 5,000 and above = 1.50×.
+          Commitment tiers (by position size): {"<"}100 USDC = 1.00×. 100 to 999 = 1.10×. 1,000 to 4,999 = 1.25×. 5,000 and above = 1.50×.
           Harvest Mode compounds on top. Each position runs independently.
         </p>
       </section>
@@ -300,7 +300,7 @@ export default function MinePage() {
                 {pendAll ? fmtDoge(pendAll[2]) : "0"}
               </div>
               <div className="mt-1 text-sm text-ink-muted">
-                TDOGE across {openPositions.length} active position{openPositions.length === 1 ? "" : "s"}
+                fDOGE across {openPositions.length} active position{openPositions.length === 1 ? "" : "s"}
               </div>
             </div>
             <button
@@ -406,7 +406,7 @@ function PositionCard({
             <div className="text-[10px] uppercase tracking-[0.2em] text-gold-400/90">Earning</div>
           </div>
           <div className="mt-1 font-display tabular text-gold-300 text-base">{fmtDoge(livePending)}</div>
-          <div className="text-[10px] text-ink-faint">TDOGE</div>
+          <div className="text-[10px] text-ink-faint">fDOGE</div>
         </div>
         <div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-ink-faint">Unlock date</div>

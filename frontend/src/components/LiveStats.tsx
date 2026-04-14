@@ -82,16 +82,16 @@ export function LiveStats() {
         <StatTile
           label="TVL"
           value={tvl !== undefined ? fmt(tvl, PATHUSD_DECIMALS) : "-"}
-          unit="pathUSD locked across protocol"
+          unit="USDC locked across protocol"
           emphasis
         />
         <StatTile
-          label="pathUSD Converted"
+          label="USDC Converted"
           value={totalFlowed !== undefined ? fmt(totalFlowed, PATHUSD_DECIMALS) : "-"}
           unit="cumulative flowed"
         />
         <StatTile
-          label="TDOGE Mined"
+          label="fDOGE Mined"
           value={totalMined !== undefined ? fmt(totalMined, DOGE_DECIMALS) : "-"}
           unit="of 210,000,000"
         />

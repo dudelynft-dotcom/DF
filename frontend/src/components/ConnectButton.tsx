@@ -77,7 +77,7 @@ export function ConnectButton() {
         className="flex items-center gap-2 px-4 py-2 rounded-md border border-red-500/50 text-red-300 text-sm hover:bg-red-500/10 transition-colors disabled:opacity-40"
       >
         <span className="h-2 w-2 rounded-full bg-red-400 animate-pulse" />
-        {switching ? "Switching…" : "Switch to Tempo"}
+        {switching ? "Switching…" : "Switch to Arc"}
       </button>
     );
   }
@@ -138,7 +138,7 @@ function ChainBadge() {
   return (
     <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gold-400/10 border border-gold-400/30 text-[11px] uppercase tracking-[0.2em] text-gold-300">
       <span className="h-1.5 w-1.5 rounded-full bg-gold-400" />
-      Tempo · {tempo.id}
+      Arc · {tempo.id}
     </span>
   );
 }

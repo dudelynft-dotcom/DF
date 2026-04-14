@@ -134,8 +134,8 @@ export default function LeaderboardPage() {
         <p className="text-xs uppercase tracking-[0.28em] text-gold-400/80">Community</p>
         <h1 className="font-display text-5xl tracking-tightest mt-3">Leaderboard</h1>
         <p className="text-ink-muted mt-3 max-w-xl">
-          Ranked by miner score. Score grows as committed pathUSD multiplied by time active.
-          Wallets that have claimed a <span className="text-gold-300">.tdoge</span> name
+          Ranked by miner score. Score grows as committed USDC multiplied by time active.
+          Wallets that have claimed a <span className="text-gold-300">.fdoge</span> name
           show their identity here.
         </p>
       </div>
@@ -221,7 +221,7 @@ function RankRow({ r, highlight }: { r: Row; highlight?: boolean }) {
         <div className="mt-2 flex items-center gap-4 text-[11px] text-ink-faint tabular">
           <span>{r.positions} {r.positions === 1 ? "pos" : "positions"}</span>
           <span>·</span>
-          <span>{fmt(r.committed, PATHUSD_DECIMALS)} pathUSD</span>
+          <span>{fmt(r.committed, PATHUSD_DECIMALS)} USDC</span>
         </div>
       </div>
 

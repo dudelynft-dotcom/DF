@@ -6,15 +6,15 @@ export default function Home() {
     <div className="space-y-24">
       <section className="pt-10 pb-4">
         <p className="text-xs uppercase tracking-[0.28em] text-gold-400/80 mb-6">
-          Tempo Chain · Mining Protocol
+          Arc Network · Mining Protocol
         </p>
         <h1 className="font-display text-[48px] sm:text-[64px] lg:text-[84px] leading-[0.95] tracking-tightest text-ink">
-          Mine <span className="text-gold-300">TDOGE</span>.
-          <br /> Built on Tempo.
+          Mine <span className="text-gold-300">fDOGE</span>.
+          <br /> Built on Arc.
         </h1>
         <p className="mt-6 sm:mt-8 max-w-xl text-ink-muted text-base sm:text-lg leading-relaxed">
-          Commit pathUSD and earn TDOGE continuously. The emission curve follows
-          a four-phase schedule with a hard cap of 210,000,000 TDOGE.
+          Commit USDC and earn fDOGE continuously. The emission curve follows
+          a four-phase schedule with a hard cap of 210,000,000 fDOGE.
         </p>
         <div className="mt-8 sm:mt-10 flex flex-wrap gap-3">
           <Link
@@ -39,14 +39,14 @@ export default function Home() {
       <section className="grid md:grid-cols-3 gap-px bg-line rounded-xl overflow-hidden">
         <Feature
           eyebrow="Mine"
-          title="Commit pathUSD. Earn TDOGE."
+          title="Commit USDC. Earn fDOGE."
           body="Rewards accrue continuously across the emission curve. Multiple parallel positions, each with its own Harvest Mode and efficiency multiplier."
           href="/mine"
         />
         <Feature
           eyebrow="Trade"
           title="Unified token directory"
-          body="Curated assets alongside tokens discovered automatically on Tempo. Verified and unverified sections, with direct on-chain address access."
+          body="Curated assets alongside tokens discovered automatically on Arc. Verified and unverified sections, with direct on-chain address access."
           href="/trade"
         />
         <Feature
@@ -62,11 +62,11 @@ export default function Home() {
           Emission Curve
         </p>
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-px bg-line rounded-xl overflow-hidden">
-          <Phase label="Phase 0"   range="0 to 10M"     rate="200 TDOGE / pathUSD" tone="bright" note="bootstrap" />
-          <Phase label="Phase 1"   range="10M to 70M"   rate="100 TDOGE / pathUSD" note="early growth" />
-          <Phase label="Phase 2"   range="70M to 150M"  rate="40 TDOGE / pathUSD"  note="stabilisation" />
-          <Phase label="Phase 3"   range="150M to 210M" rate="10 TDOGE / pathUSD"  note="scarcity" />
-          <Phase label="Post-cap"  range="210M +"       rate="0.2 TDOGE / pathUSD" tone="dim" note="10M / yr inflation" />
+          <Phase label="Phase 0"   range="0 to 10M"     rate="200 fDOGE / USDC" tone="bright" note="bootstrap" />
+          <Phase label="Phase 1"   range="10M to 70M"   rate="100 fDOGE / USDC" note="early growth" />
+          <Phase label="Phase 2"   range="70M to 150M"  rate="40 fDOGE / USDC"  note="stabilisation" />
+          <Phase label="Phase 3"   range="150M to 210M" rate="10 fDOGE / USDC"  note="scarcity" />
+          <Phase label="Post-cap"  range="210M +"       rate="0.2 fDOGE / USDC" tone="dim" note="10M / yr inflation" />
         </div>
       </section>
     </div>

@@ -13,8 +13,8 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "DOGE FORGE · Tempo",
-  description: "Mine TDOGE. Trade on Tempo.",
+  title: "DOGE FORGE · Arc",
+  description: "Mine fDOGE. Trade on Arc.",
   icons: {
     icon: [{ url: "/doge.png", type: "image/png" }],
     shortcut: "/doge.png",

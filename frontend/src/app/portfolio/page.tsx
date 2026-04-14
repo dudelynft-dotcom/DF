@@ -53,14 +53,14 @@ export default function PortfolioPage() {
         </h1>
         {!identity && (
           <p className="mt-3 text-sm text-ink-muted">
-            Claim a <a href="/id" className="text-gold-300 hover:text-gold-200">.tdoge identity</a> to display it across the app.
+            Claim a <a href="/id" className="text-gold-300 hover:text-gold-200">.fdoge identity</a> to display it across the app.
           </p>
         )}
       </div>
 
       <section className="grid sm:grid-cols-2 gap-px bg-line rounded-xl overflow-hidden">
-        <Card label="TDOGE Balance"   value={doge !== undefined ? fmt(doge, DOGE_DECIMALS)    : "-"} unit="TDOGE"   emphasis />
-        <Card label="pathUSD Balance" value={usd  !== undefined ? fmt(usd,  PATHUSD_DECIMALS) : "-"} unit="pathUSD" />
+        <Card label="fDOGE Balance"   value={doge !== undefined ? fmt(doge, DOGE_DECIMALS)    : "-"} unit="fDOGE"   emphasis />
+        <Card label="USDC Balance"    value={usd  !== undefined ? fmt(usd,  PATHUSD_DECIMALS) : "-"} unit="USDC" />
       </section>
 
       <section>
@@ -75,8 +75,8 @@ export default function PortfolioPage() {
         </div>
         <div className="grid sm:grid-cols-4 gap-px bg-line rounded-xl overflow-hidden">
           <Card label="Open Positions"  value={String(openCount)}             unit={openCount === 1 ? "position" : "positions"} />
-          <Card label="Committed"       value={fmt(totalCommit, PATHUSD_DECIMALS)} unit="pathUSD active" />
-          <Card label="Pending TDOGE"   value={fmt(totalPending, DOGE_DECIMALS)}   unit="accrued plus projected" emphasis />
+          <Card label="Committed"       value={fmt(totalCommit, PATHUSD_DECIMALS)} unit="USDC active" />
+          <Card label="Pending fDOGE"   value={fmt(totalPending, DOGE_DECIMALS)}   unit="accrued plus projected" emphasis />
           <Card label="Miner Score"     value={score !== undefined ? fmt(score, PATHUSD_DECIMALS) : "-"} unit="points" />
         </div>
         {openCount === 0 && (

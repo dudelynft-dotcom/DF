@@ -28,8 +28,8 @@ export default function IdPage() {
       { address: addresses.names, abi: namesAbi, functionName: "MAX_SUPPLY",    chainId: tempo.id },
       { address: addresses.names, abi: namesAbi, functionName: "isEligible",    args: address ? [address] : undefined, chainId: tempo.id },
       { address: addresses.names, abi: namesAbi, functionName: "displayNameOf", args: address ? [address] : undefined, chainId: tempo.id },
-      { address: addresses.pathUSD, abi: erc20Abi, functionName: "balanceOf",   args: address ? [address] : undefined, chainId: tempo.id },
-      { address: addresses.pathUSD, abi: erc20Abi, functionName: "allowance",   args: address ? [address, addresses.names] : undefined, chainId: tempo.id },
+      { address: addresses.usdc, abi: erc20Abi, functionName: "balanceOf",   args: address ? [address] : undefined, chainId: tempo.id },
+      { address: addresses.usdc, abi: erc20Abi, functionName: "allowance",   args: address ? [address, addresses.names] : undefined, chainId: tempo.id },
     ],
     allowFailure: true,
     query: { refetchInterval: 10_000 },
@@ -89,11 +89,11 @@ export default function IdPage() {
 
   async function doApprove() {
     if (!claimCost) return;
-    const id = toast.push({ kind: "pending", title: "Approving pathUSD", ttl: 0 });
+    const id = toast.push({ kind: "pending", title: "Approving USDC", ttl: 0 });
     setBusy("approve");
     try {
       const hash = await sendTx(config, {
-        address: addresses.pathUSD, abi: erc20Abi, functionName: "approve",
+        address: addresses.usdc, abi: erc20Abi, functionName: "approve",
         args: [addresses.names, claimCost],
       });
       toast.update(id, { body: "Waiting for confirmation", hash });
@@ -113,7 +113,7 @@ export default function IdPage() {
 
   async function doClaim() {
     if (!canClaim) return;
-    const id = toast.push({ kind: "pending", title: `Claiming ${debouncedName}.tdoge`, ttl: 0 });
+    const id = toast.push({ kind: "pending", title: `Claiming ${debouncedName}.fdoge`, ttl: 0 });
     setBusy("claim");
     try {
       const hash = await sendTx(config, {
@@ -123,7 +123,7 @@ export default function IdPage() {
       toast.update(id, { body: "Submitted. Waiting for confirmation", hash });
       const r = await waitForTransactionReceipt(config, { hash, chainId: tempo.id });
       if (r.status === "success") {
-        toast.update(id, { kind: "success", title: `${debouncedName}.tdoge claimed`, body: "Fee routed to TDOGE liquidity.", ttl: 7000 });
+        toast.update(id, { kind: "success", title: `${debouncedName}.fdoge claimed`, body: "Fee routed to fDOGE liquidity.", ttl: 7000 });
         setName("");
         refetch();
       } else {
@@ -146,16 +146,16 @@ export default function IdPage() {
     <div className="space-y-10 max-w-2xl mx-auto">
       <div>
         <p className="text-xs uppercase tracking-[0.28em] text-gold-400/80">Identity</p>
-        <h1 className="font-display text-5xl tracking-tightest mt-3">Claim your .tdoge ID</h1>
+        <h1 className="font-display text-5xl tracking-tightest mt-3">Claim your .fdoge ID</h1>
         <p className="text-ink-muted mt-3 max-w-xl">
           Your on-chain identity across DOGE FORGE. Any miner is eligible.
-          Claim fee routes straight to TDOGE liquidity — not treasury.
+          Claim fee routes straight to fDOGE liquidity — not treasury.
         </p>
       </div>
 
       {onWrongChain && (
         <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-red-500/40 bg-red-500/5">
-          <div className="text-sm text-red-300">Switch to Tempo Testnet (chain {tempo.id}).</div>
+          <div className="text-sm text-red-300">Switch to Arc Testnet (chain {tempo.id}).</div>
           <button
             onClick={switchToTempo} disabled={busy === "switch"}
             className="px-3 py-1.5 rounded-md bg-gold-400 text-bg-base text-xs font-medium disabled:opacity-40"
@@ -167,7 +167,7 @@ export default function IdPage() {
 
       {/* Supply strip */}
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-line rounded-xl overflow-hidden">
-        <Stat label="Cost"      value={`${costHuman} pathUSD`} />
+        <Stat label="Cost"      value={`${costHuman} USDC`} />
         <Stat label="Supply"    value={maxSupply !== undefined ? maxSupply.toString() : "-"} />
         <Stat label="Claimed"   value={totalClaimed !== undefined ? totalClaimed.toString() : "-"} />
         <Stat label="Remaining" value={remaining !== undefined ? remaining.toString() : "-"} emphasis />
@@ -189,9 +189,9 @@ export default function IdPage() {
               {alreadyHolder
                 ? <span className="font-display text-gold-300">{existingName} claimed</span>
                 : !isEligible
-                  ? <span className="text-ink-muted">Commit pathUSD in Mine to become eligible</span>
+                  ? <span className="text-ink-muted">Commit USDC in Mine to become eligible</span>
                   : insufficientBalance
-                    ? <span className="text-red-300">Not enough pathUSD (need {costHuman})</span>
+                    ? <span className="text-red-300">Not enough USDC (need {costHuman})</span>
                     : <span className="text-gold-300">Eligible · ready to claim</span>}
             </span>
           </div>
@@ -215,7 +215,7 @@ export default function IdPage() {
               className="flex-1 px-4 py-3 bg-transparent outline-none text-lg tabular text-ink"
             />
             <span className="px-4 py-3 text-ink-faint text-lg tabular bg-bg-surface border-l border-line select-none">
-              .tdoge
+              .fdoge
             </span>
           </div>
 
@@ -227,7 +227,7 @@ export default function IdPage() {
               disabled={!address || onWrongChain || busy !== null || insufficientBalance}
               className="w-full px-4 py-3 rounded-md border border-gold-400/60 text-ink font-medium hover:bg-gold-400/10 transition-colors disabled:opacity-40"
             >
-              {busy === "approve" ? "Approving..." : `Approve ${costHuman} pathUSD`}
+              {busy === "approve" ? "Approving..." : `Approve ${costHuman} USDC`}
             </button>
           ) : (
             <button
@@ -240,17 +240,17 @@ export default function IdPage() {
                 : !address              ? "Connect wallet"
                 : onWrongChain          ? "Wrong network"
                 : !claimOpen            ? "Claims not open"
-                : !isEligible           ? "Commit pathUSD to become eligible"
-                : insufficientBalance   ? `Need ${costHuman} pathUSD`
+                : !isEligible           ? "Commit USDC to become eligible"
+                : insufficientBalance   ? `Need ${costHuman} USDC`
                 : !localValid           ? "Enter a valid name"
                 : available === false   ? "Name taken"
-                :                         `Claim ${debouncedName || "name"}.tdoge · ${costHuman} pathUSD`}
+                :                         `Claim ${debouncedName || "name"}.fdoge · ${costHuman} USDC`}
             </button>
           )}
 
           <p className="text-[11px] text-ink-faint text-center leading-relaxed">
             Lowercase a-z, 0-9, hyphens. 1 to 20 characters. One ID per wallet.
-            Claim fee flows directly into TDOGE liquidity.
+            Claim fee flows directly into fDOGE liquidity.
           </p>
         </section>
       )}
@@ -264,8 +264,8 @@ function NameStatus({
   if (!name) return <div className="text-xs text-ink-faint h-4">&nbsp;</div>;
   if (!localValid) return <div className="text-xs text-red-300">Invalid name format.</div>;
   if (available === undefined) return <div className="text-xs text-ink-faint">Checking availability...</div>;
-  if (available) return <div className="text-xs text-emerald-300">{name}.tdoge is available.</div>;
-  return <div className="text-xs text-red-300">{name}.tdoge is already taken.</div>;
+  if (available) return <div className="text-xs text-emerald-300">{name}.fdoge is available.</div>;
+  return <div className="text-xs text-red-300">{name}.fdoge is already taken.</div>;
 }
 
 function Stat({ label, value, emphasis }: { label: string; value: string; emphasis?: boolean }) {

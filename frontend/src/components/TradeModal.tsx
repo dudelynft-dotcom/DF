@@ -63,7 +63,7 @@ export function TradeModal({
     }
   }, [open]);
 
-  const quote = CURATED_TOKENS[1]; // pathUSD
+  const quote = CURATED_TOKENS.find((t) => t.kind === "native-stable") ?? CURATED_TOKENS[0]; // USDC
 
   const from = side === "buy" ? { address: quote.address, symbol: quote.symbol, decimals: quote.decimals } : token;
   const to   = side === "buy" ? token : { address: quote.address, symbol: quote.symbol, decimals: quote.decimals };
@@ -239,7 +239,7 @@ export function TradeModal({
           <Row label="Route">
             <span className="text-ink-muted">
               {route === "tdoge-amm" ? "DOGE FORGE AMM"
-                : route === "stablecoin-dex" ? "Tempo DEX (stablecoin)"
+                : route === "stablecoin-dex" ? "External DEX"
                 : "No route"}
             </span>
           </Row>
@@ -270,9 +270,8 @@ export function TradeModal({
         <div className="px-6 pt-5 pb-5">
           {route === "none" ? (
             <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2.5 text-[11px] text-red-300 leading-relaxed">
-              No trading route available for this pair. TDOGE trades against pathUSD in the
-              DOGE FORGE AMM. Stablecoin-to-stablecoin pairs route through Tempo&apos;s
-              enshrined DEX.
+              No trading route available for this pair. fDOGE trades against USDC in the
+              DOGE FORGE AMM. Other tokens need an external DEX.
             </div>
           ) : needsApproval ? (
             <button
@@ -299,7 +298,7 @@ export function TradeModal({
             </button>
           )}
           <p className="mt-3 text-[10px] text-ink-faint text-center">
-            Trades settle on Tempo. DOGE FORGE does not custody your swap.
+            Trades settle on Arc. DOGE FORGE does not custody your swap.
           </p>
         </div>
       </div>

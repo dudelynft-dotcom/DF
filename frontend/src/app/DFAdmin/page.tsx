@@ -184,7 +184,7 @@ export default function AdminPage() {
 
         <div className="grid sm:grid-cols-2 gap-6">
           <Stat label="Paused" value={paused === null ? "n/a" : paused ? "yes" : "no"} />
-          <Stat label="Pending liquidity (pathUSD)" value={pendingLq} />
+          <Stat label="Pending liquidity (USDC)" value={pendingLq} />
           <NumberField
             label="globalMultiplier (bps, 10000 = 1×)"
             value={globalMult}
@@ -200,7 +200,7 @@ export default function AdminPage() {
             disabled={writing}
           />
           <NumberField
-            label="perWalletCap (whole pathUSD)"
+            label="perWalletCap (whole USDC)"
             value={walletCap}
             onChange={setWalletCap}
             onSave={(v) => sendWrite("setPerWalletCap", parseUnits(v, 6))}

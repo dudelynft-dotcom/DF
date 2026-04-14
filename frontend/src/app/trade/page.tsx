@@ -74,7 +74,7 @@ export default function TradePage() {
       case "new":      arr.sort((a, b) => (b.first_seen ?? 0) - (a.first_seen ?? 0)); break;
       case "name":     arr.sort((a, b) => a.symbol.localeCompare(b.symbol)); break;
     }
-    // Pin TDOGE to the top regardless of sort.
+    // Pin fDOGE to the top regardless of sort.
     const dogeLc = addresses.doge.toLowerCase();
     const dogeIdx = arr.findIndex((t) => t.address.toLowerCase() === dogeLc);
     if (dogeIdx > 0) {
@@ -93,8 +93,8 @@ export default function TradePage() {
         <p className="text-xs uppercase tracking-[0.28em] text-gold-400/80">Trading Hub</p>
         <h1 className="font-display text-5xl tracking-tightest mt-3">Markets</h1>
         <p className="text-ink-muted mt-3 max-w-2xl">
-          Live on-chain pricing for every verified pair. TDOGE routes through the
-          DOGE FORGE AMM; stablecoin pairs settle on Tempo&apos;s enshrined DEX.
+          Live on-chain pricing for every verified pair. fDOGE routes through the
+          DOGE FORGE AMM on Arc; stablecoin transfers use standard ERC-20 routes.
         </p>
       </div>
 
@@ -150,7 +150,7 @@ export default function TradePage() {
         </div>
         {unverifiedAll.length === 0 ? (
           <div className="rounded-xl border border-line bg-bg-surface p-8 text-center text-ink-muted text-sm">
-            No unverified tokens discovered yet. The indexer scans new contract deployments on Tempo as it runs.
+            No unverified tokens discovered yet. The indexer scans new contract deployments on Arc as it runs.
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
