@@ -11,67 +11,50 @@ export type CuratedToken = {
 
 /// Curated list is always marked verified. Backend discovery adds to the
 /// unverified pool below this, which admins can later promote to verified.
-export const CURATED_TOKENS: CuratedToken[] = [
-  {
+/// Entries with a missing/empty address are filtered out — happens during
+/// the window between a chain migration and the first deploy.
+const RAW_CURATED: Array<CuratedToken | null> = [
+  addresses.doge ? {
     address: addresses.doge,
-    symbol:  "TDOGE",
-    name:    "Tempo Doge",
+    symbol:  "fDOGE",
+    name:    "Doge Forge",
     decimals: 18,
     kind:    "project",
     description: "The native mining reward of DOGE FORGE. 210M supply cap.",
-  },
-  {
-    address: "0x20c0000000000000000000000000000000000000",
-    symbol:  "pathUSD",
-    name:    "PathUSD",
+  } : null,
+  addresses.usdc ? {
+    address: addresses.usdc,
+    symbol:  "USDC",
+    name:    "USD Coin",
     decimals: 6,
     kind:    "native-stable",
-    description: "Tempo's canonical stablecoin used across DOGE FORGE.",
-  },
-  {
-    address: "0x20c0000000000000000000000000000000000001",
-    symbol:  "AlphaUSD",
-    name:    "AlphaUSD",
-    decimals: 6,
-    kind:    "stablecoin",
-  },
-  {
-    address: "0x20c0000000000000000000000000000000000002",
-    symbol:  "BetaUSD",
-    name:    "BetaUSD",
-    decimals: 6,
-    kind:    "stablecoin",
-  },
-  {
-    address: "0x20c0000000000000000000000000000000000003",
-    symbol:  "ThetaUSD",
-    name:    "ThetaUSD",
-    decimals: 6,
-    kind:    "stablecoin",
-  },
+    description: "Arc's native gas token; also the canonical stablecoin for DOGE FORGE.",
+  } : null,
 ];
 
-/// Tempo does not yet publish a consumer-facing DEX UI. Until the enshrined
-/// orderbook is integrated natively in DOGE FORGE (Phase A) or a third-party
-/// client ships, the "view" action just opens the token's explorer page.
+export const CURATED_TOKENS: CuratedToken[] = RAW_CURATED.filter(
+  (t): t is CuratedToken => !!t && !!t.address,
+);
+
 export function explorerLink(addr: `0x${string}`): string {
-  const explorer = process.env.NEXT_PUBLIC_TEMPO_EXPLORER_URL
-    ?? "https://explore.testnet.tempo.xyz";
+  const explorer = process.env.NEXT_PUBLIC_ARC_EXPLORER_URL
+    ?? "https://testnet.arcscan.app";
   return `${explorer}/address/${addr}`;
 }
 
-export const QUOTE_TOKEN = CURATED_TOKENS[1]; // pathUSD is the canonical quote
+export const QUOTE_TOKEN: CuratedToken | undefined =
+  CURATED_TOKENS.find((t) => t.kind === "native-stable");
 
-/// Build a deep-link to Tempo DEX for a specific trade intent.
+/// Deep-link to an external DEX for a specific trade intent.
 /// Returns null if no DEX URL is configured (operator sets
-/// NEXT_PUBLIC_TEMPO_DEX_URL when a compatible UI ships).
+/// NEXT_PUBLIC_ARC_DEX_URL when a compatible UI ships).
 export function tradeLink(
   base: `0x${string}`,
   side: "buy" | "sell" = "buy",
   amount?: string,
 ): string | null {
-  const dex = process.env.NEXT_PUBLIC_TEMPO_DEX_URL;
-  if (!dex) return null;
+  const dex = process.env.NEXT_PUBLIC_ARC_DEX_URL;
+  if (!dex || !QUOTE_TOKEN) return null;
   const q = new URLSearchParams({
     base,
     quote: QUOTE_TOKEN.address,
