@@ -241,12 +241,14 @@ function TokenCard({
           >
             ↗
           </a>
-          <button
-            onClick={onTrade}
-            className="px-3 py-1.5 rounded-md bg-gold-400 text-bg-base text-xs font-semibold hover:bg-gold-300 transition-colors"
-          >
-            Trade
-          </button>
+          {token.kind !== "native-stable" && (
+            <button
+              onClick={onTrade}
+              className="px-3 py-1.5 rounded-md bg-gold-400 text-bg-base text-xs font-semibold hover:bg-gold-300 transition-colors"
+            >
+              Trade
+            </button>
+          )}
         </div>
       </div>
     </div>
