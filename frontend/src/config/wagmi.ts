@@ -1,11 +1,11 @@
 import { createConfig, http } from "wagmi";
 import { injected, walletConnect, coinbaseWallet } from "wagmi/connectors";
-import { pharos } from "./chain";
+import { arc } from "./chain";
 
 const wcProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 const appMeta = {
   name: "DOGE FORGE",
-  description: "Mine fDOGE on Pharos",
+  description: "Mine fDOGE on Arc",
   url: typeof window !== "undefined" ? window.location.origin : "https://dogeforge.fun",
   icons: [] as string[],
 };
@@ -23,10 +23,10 @@ const connectors = [
 ];
 
 export const wagmiConfig = createConfig({
-  chains: [pharos],
+  chains: [arc],
   connectors,
   transports: {
-    [pharos.id]: http(pharos.rpcUrls.default.http[0]),
+    [arc.id]: http(arc.rpcUrls.default.http[0]),
   },
   ssr: true,
 });

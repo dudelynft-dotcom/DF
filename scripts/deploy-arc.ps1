@@ -1,11 +1,13 @@
-# Deploy DOGE FORGE to Pharos Atlantic in one shot.
+# Deploy DOGE FORGE to Arc Testnet in one shot.
 #
 # Prerequisites:
 #   1. Foundry installed at C:\Users\USER\.foundry\bin\forge.exe
 #   2. contracts\.env exists with:
-#        PHAROS_RPC_URL, PRIVATE_KEY, PATHUSD_ADDRESS, TREASURY_ADDRESS
-#      (PATHUSD_ADDRESS is the Pharos USDC address — already filled in .env.example)
-#   3. Admin wallet funded with PHRS (gas) + USDC
+#        PRIVATE_KEY, PATHUSD_ADDRESS, TREASURY_ADDRESS
+#      (PATHUSD_ADDRESS is the Arc USDC address — already in .env.example)
+#   3. Admin wallet funded with USDC (Arc uses USDC AS gas, so a single
+#      balance covers both deployment gas and later LP seeding).
+#      Faucet: https://faucet.circle.com
 #
 # What this does:
 #   - Deploys: DOGE, Miner, TdogePair, LiquidityManager, TdogeRouter
@@ -35,10 +37,16 @@ if (-not $env:PRIVATE_KEY -or $env:PRIVATE_KEY -eq "0x") {
 if (-not $env:TREASURY_ADDRESS -or $env:TREASURY_ADDRESS -eq "0x") {
   throw "TREASURY_ADDRESS is not set in contracts\.env"
 }
-if (-not $env:PHAROS_RPC_URL) {
-  $env:PHAROS_RPC_URL = "https://atlantic.dplabs-internal.com"
+if (-not $env:ARC_RPC_URL) {
+  $env:ARC_RPC_URL = "https://rpc.testnet.arc.network"
 }
-Write-Host "RPC:      $env:PHAROS_RPC_URL"
+# Arc USDC (verified 6 decimals). Force-override any stale chain's address.
+$ARC_USDC = "0x3600000000000000000000000000000000000000"
+if ($env:PATHUSD_ADDRESS -ne $ARC_USDC) {
+  Write-Host "Overriding PATHUSD_ADDRESS -> $ARC_USDC (Arc USDC)" -ForegroundColor Yellow
+  $env:PATHUSD_ADDRESS = $ARC_USDC
+}
+Write-Host "RPC:      $env:ARC_RPC_URL"
 Write-Host "USDC:     $env:PATHUSD_ADDRESS"
 Write-Host "Treasury: $env:TREASURY_ADDRESS"
 
@@ -47,7 +55,7 @@ try {
   # --- deploy 1 ---
   Write-Host "`n=== Deploying Miner / DOGE / Pair / LM / Router ===" -ForegroundColor Cyan
   $out1 = & $forge script "script/Deploy.s.sol:Deploy" `
-    --rpc-url $env:PHAROS_RPC_URL `
+    --rpc-url $env:ARC_RPC_URL `
     --broadcast `
     --gas-estimate-multiplier 200 2>&1
   Write-Host ($out1 -join "`n")
@@ -76,7 +84,7 @@ try {
   $env:MINER_ADDRESS = $MINER
   $env:LM_ADDRESS    = $LM
   $out2 = & $forge script "script/DeployTdogeNames.s.sol:DeployTdogeNames" `
-    --rpc-url $env:PHAROS_RPC_URL `
+    --rpc-url $env:ARC_RPC_URL `
     --broadcast `
     --gas-estimate-multiplier 200 2>&1
   Write-Host ($out2 -join "`n")
@@ -90,9 +98,9 @@ finally {
 # --- write frontend\.env.local ---
 $envLocal = Join-Path $frontend ".env.local"
 $content = @"
-NEXT_PUBLIC_PHAROS_RPC_URL=https://atlantic.dplabs-internal.com
-NEXT_PUBLIC_PHAROS_CHAIN_ID=688689
-NEXT_PUBLIC_PHAROS_EXPLORER_URL=https://atlantic.pharosscan.xyz
+NEXT_PUBLIC_ARC_RPC_URL=https://rpc.testnet.arc.network
+NEXT_PUBLIC_ARC_CHAIN_ID=5042002
+NEXT_PUBLIC_ARC_EXPLORER_URL=https://testnet.arcscan.app
 
 NEXT_PUBLIC_USDC_ADDRESS=$($env:PATHUSD_ADDRESS)
 
@@ -113,12 +121,12 @@ $vercelEnv = Join-Path $PSScriptRoot "vercel-env.txt"
 $prod = @"
 # Paste these into Vercel -> Settings -> Environment Variables (Raw Editor).
 # Remember to ALSO set (not in this file):
-#   ADMIN_TOKEN           = (same long secret as on your EC2 backend)
+#   ADMIN_TOKEN               = (same long secret as on your EC2 backend)
 #   NEXT_PUBLIC_ADMIN_ADDRESS = (your admin wallet address, lowercase)
 
-NEXT_PUBLIC_PHAROS_RPC_URL=https://atlantic.dplabs-internal.com
-NEXT_PUBLIC_PHAROS_CHAIN_ID=688689
-NEXT_PUBLIC_PHAROS_EXPLORER_URL=https://atlantic.pharosscan.xyz
+NEXT_PUBLIC_ARC_RPC_URL=https://rpc.testnet.arc.network
+NEXT_PUBLIC_ARC_CHAIN_ID=5042002
+NEXT_PUBLIC_ARC_EXPLORER_URL=https://testnet.arcscan.app
 
 NEXT_PUBLIC_USDC_ADDRESS=$($env:PATHUSD_ADDRESS)
 

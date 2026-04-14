@@ -1,37 +1,37 @@
 import { defineChain } from "viem";
 
-/// Pharos Atlantic testnet. Vanilla EVM, native gas is PHRS.
-/// Wallets need a small PHRS balance to transact — faucet:
-/// https://testnet.pharosnetwork.xyz/
-export const pharos = defineChain({
-  id: Number(process.env.NEXT_PUBLIC_PHAROS_CHAIN_ID ?? 688689),
-  name: "Pharos Testnet",
+/// Arc Testnet. Fully EVM (Prague). Gas is paid in USDC — users only ever
+/// need one token in their wallet. Faucet: https://faucet.circle.com
+export const arc = defineChain({
+  id: Number(process.env.NEXT_PUBLIC_ARC_CHAIN_ID ?? 5042002),
+  name: "Arc Testnet",
   testnet: true,
   nativeCurrency: {
-    name: "Pharos",
-    symbol: "PHRS",
+    // Arc's gas unit is USDC. Wallets display it as such.
+    name: "USDC",
+    symbol: "USDC",
     decimals: 18,
   },
   rpcUrls: {
     default: {
-      http: [process.env.NEXT_PUBLIC_PHAROS_RPC_URL ?? "https://atlantic.dplabs-internal.com"],
+      http: [process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.network"],
     },
   },
   blockExplorers: {
     default: {
-      name: "Pharos Explorer",
-      url: process.env.NEXT_PUBLIC_PHAROS_EXPLORER_URL ?? "https://atlantic.pharosscan.xyz",
+      name: "Arcscan",
+      url: process.env.NEXT_PUBLIC_ARC_EXPLORER_URL ?? "https://testnet.arcscan.app",
     },
   },
   contracts: {
     multicall3: {
-      // Canonical Multicall3, pre-deployed on Pharos Atlantic.
+      // Canonical Multicall3, pre-deployed on Arc.
       address: "0xcA11bde05977b3631167028862bE2a173976CA11",
     },
   },
 });
 
-const USDC_DEFAULT = "0xcfC8330f4BCAB529c625D12781b1C19466A9Fc8B" as const;
+const USDC_DEFAULT = "0x3600000000000000000000000000000000000000" as const;
 const ZERO_ADDR    = "0x0000000000000000000000000000000000000000" as const;
 
 const usdcAddr = (process.env.NEXT_PUBLIC_USDC_ADDRESS ?? USDC_DEFAULT) as `0x${string}`;
@@ -46,17 +46,18 @@ export const addresses = {
   names:            process.env.NEXT_PUBLIC_NAMES_ADDRESS  as `0x${string}`,
 
   // Backwards-compat shims — existing components still reference these names.
-  // `pathUSD` now aliases Pharos USDC. `stablecoinDex` is a zero-address
-  // placeholder; the Tempo-precompile route is being removed from TradeModal.
+  // `pathUSD` aliases Arc USDC. `stablecoinDex` is a zero-address placeholder
+  // (Tempo-era precompile; not used on Arc).
   pathUSD:          usdcAddr,
   stablecoinDex:    ZERO_ADDR as `0x${string}`,
 };
 
-/// USDC on Pharos uses 6 decimals (verified on-chain). fDOGE is the standard 18.
+/// USDC on Arc Testnet uses 6 decimals (verified on-chain). fDOGE is 18.
 export const USDC_DECIMALS = 6;
 export const DOGE_DECIMALS = 18;
 
 // Compat aliases — removed in a follow-up cleanup pass.
 export const PATHUSD_DECIMALS = USDC_DECIMALS;
 export const STABLECOIN_DEX_PRICE_SCALE = 100_000;
-export const tempo = pharos;
+export const tempo  = arc;
+export const pharos = arc;
