@@ -5,6 +5,9 @@ import { addresses } from "@/config/chain";
 import { TradeModal, type TradeToken } from "@/components/TradeModal";
 import { PriceChart } from "@/components/PriceChart";
 import { SwapForm } from "@/components/SwapForm";
+import { useReadContract } from "wagmi";
+import { unitflowFactoryAbi } from "@/lib/dexAbis";
+import { tempo } from "@/config/chain";
 import { useTokenMetrics, fmtUsd, fmtSupply, fmtPct, type TokenMetrics } from "@/lib/metrics";
 
 type DiscoveredToken = {
@@ -542,13 +545,10 @@ function ProDetail({
       {/* Chart + swap panel, Hyperliquid-style 2-column. Stacks on mobile. */}
       <div className="grid lg:grid-cols-[1fr_320px] gap-4">
         <div className="flex flex-col gap-4">
-          {/* Price chart — only fDOGE/USDC is indexed today. */}
+          {/* Price chart — our own pair for fDOGE, UnitFlow pair lookup for the
+              rest. Backend indexes both as long as they exist. */}
           <div className="h-48 sm:h-64 rounded-lg border border-line bg-bg-base overflow-hidden">
-            <PriceChart
-              pair={token.address.toLowerCase() === addresses.doge.toLowerCase() ? addresses.pair : undefined}
-              interval="1h"
-              className="w-full h-full"
-            />
+            <ChartForToken token={token} />
           </div>
 
           {/* Metrics strip */}
@@ -593,6 +593,31 @@ function ProDetail({
       </div>
     </>
   );
+}
+
+/// Resolves the correct pair address for a given token so PriceChart can
+/// fetch its candles. fDOGE maps to our TdogePair; any other token maps to
+/// the UnitFlow V2.5 pair for (token, USDC), read from the factory.
+function ChartForToken({ token }: { token: TileToken }) {
+  const isDoge = token.address.toLowerCase() === addresses.doge.toLowerCase();
+  const { data: unitflowPair } = useReadContract({
+    address: addresses.unitflowFactory,
+    abi: unitflowFactoryAbi,
+    functionName: "getPair",
+    args: !isDoge ? [token.address, addresses.usdc] : undefined,
+    chainId: tempo.id,
+    query: { enabled: !isDoge, refetchInterval: 60_000 },
+  });
+
+  let pair: `0x${string}` | undefined;
+  if (isDoge) {
+    pair = addresses.pair;
+  } else {
+    const p = unitflowPair as `0x${string}` | undefined;
+    if (p && p.toLowerCase() !== "0x0000000000000000000000000000000000000000") pair = p;
+  }
+
+  return <PriceChart key={token.address} pair={pair} interval="1h" className="w-full h-full" />;
 }
 
 function MetricCell({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
