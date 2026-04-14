@@ -5,14 +5,15 @@ import { formatUnits, parseUnits } from "viem";
 import { useEffect, useMemo, useState } from "react";
 import { addresses, PATHUSD_DECIMALS, DOGE_DECIMALS, tempo } from "@/config/chain";
 import { erc20Abi, minerAbi } from "@/lib/abis";
+import { pairAbi } from "@/lib/dexAbis";
 import { sendTx, ensureTempoChain, prettifyError } from "@/lib/tx";
 import { useToast } from "@/components/Toaster";
 import { useIdentity } from "@/lib/useIdentity";
 
 const HARVEST_MODES = [
-  { id: 0, name: "Instant",   boost: "1.00×", sub: "claim anytime",            lockLabel: "no wait" },
-  { id: 1, name: "Monthly",   boost: "1.20×", sub: "rewards unlock in 30 days",  lockLabel: "30 days" },
-  { id: 2, name: "Long-Term", boost: "1.50×", sub: "rewards unlock in 180 days", lockLabel: "180 days" },
+  { id: 0, name: "Instant",   boost: "1.00×", boostBps: 10_000, sub: "claim anytime",            lockLabel: "no wait" },
+  { id: 1, name: "Monthly",   boost: "1.20×", boostBps: 12_000, sub: "rewards unlock in 30 days",  lockLabel: "30 days" },
+  { id: 2, name: "Long-Term", boost: "1.50×", boostBps: 15_000, sub: "rewards unlock in 180 days", lockLabel: "180 days" },
 ] as const;
 
 type Position = {
@@ -48,6 +49,7 @@ export default function MinePage() {
   const usd   = { address: addresses.usdc, abi: erc20Abi, chainId: tempo.id } as const;
 
   // Global reads
+  const pair = { address: addresses.pair, abi: pairAbi, chainId: tempo.id } as const;
   const { data: globals, refetch: refetchGlobals } = useReadContracts({
     contracts: [
       { ...miner, functionName: "currentPhase" },
@@ -61,6 +63,8 @@ export default function MinePage() {
       { ...usd,   functionName: "balanceOf",        args: [addresses.miner] },
       { ...usd,   functionName: "balanceOf",        args: [addresses.liquidityManager] },
       { ...usd,   functionName: "balanceOf",        args: [addresses.pair] },
+      { ...pair,  functionName: "getReserves" },
+      { ...pair,  functionName: "token0" },
     ],
     allowFailure: true,
     query: { refetchInterval: 5000 },
@@ -77,6 +81,36 @@ export default function MinePage() {
   const minerBal     = globals?.[8]?.result as bigint | undefined;
   const lmBal        = globals?.[9]?.result as bigint | undefined;
   const pairBal      = globals?.[10]?.result as bigint | undefined;
+  const reserves     = globals?.[11]?.result as readonly [bigint, bigint, number] | undefined;
+  const token0       = globals?.[12]?.result as `0x${string}` | undefined;
+
+  // fDOGE price in USDC (computed from pair reserves).
+  const fdogePrice = useMemo(() => {
+    if (!reserves || !token0) return null;
+    const isT0Doge = token0.toLowerCase() === addresses.doge.toLowerCase();
+    const rDoge = isT0Doge ? reserves[0] : reserves[1];
+    const rUsd  = isT0Doge ? reserves[1] : reserves[0];
+    if (rDoge === 0n || rUsd === 0n) return null;
+    // USDC-human / fDOGE-human. USDC 6-dec, fDOGE 18-dec.
+    const usdH  = Number(formatUnits(rUsd, 6));
+    const dogeH = Number(formatUnits(rDoge, 18));
+    return dogeH > 0 ? usdH / dogeH : null;
+  }, [reserves, token0]);
+
+  /// Compute APR for 1 committed USDC under a given harvest-mode boost.
+  ///   daily USDC flowed = commitment * flowRateBpsPerDay / 10000
+  ///   daily fDOGE minted = daily USDC flowed * phaseRate_per_USDC_human * modeBoost
+  ///   daily USD yield = daily fDOGE minted * fDOGE price
+  ///   APR = daily yield * 365 * 100
+  function aprForBoost(modeBps: number): number | null {
+    if (fdogePrice === null || !phase || convRate === undefined) return null;
+    const phaseRateHuman = Number(formatUnits(phase[1], DOGE_DECIMALS)); // fDOGE per 1 whole USDC
+    const dailyFlowFrac  = Number(convRate) / 10_000;                    // e.g. 0.02 for 2%/day
+    const boost          = modeBps / 10_000;
+    const dailyfDOGE     = dailyFlowFrac * phaseRateHuman * boost;
+    const dailyUSD       = dailyfDOGE * fdogePrice;
+    return dailyUSD * 365 * 100;
+  }
   const tvl = (minerBal !== undefined && lmBal !== undefined && pairBal !== undefined)
     ? minerBal + lmBal + pairBal
     : undefined;
@@ -214,6 +248,7 @@ export default function MinePage() {
         <div className="mt-5 grid md:grid-cols-3 gap-3">
           {HARVEST_MODES.map((m) => {
             const active = selectedMode === m.id;
+            const apr = aprForBoost(m.boostBps);
             return (
               <button
                 key={m.id}
@@ -228,7 +263,12 @@ export default function MinePage() {
                   <span className={`font-display text-xl tabular ${active ? "text-gold-300" : "text-ink"}`}>{m.boost}</span>
                 </div>
                 <div className="mt-1 text-xs text-ink-muted">{m.sub}</div>
-                <div className="mt-3 text-[10px] uppercase tracking-[0.22em] text-ink-faint">{m.lockLabel}</div>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-[0.22em] text-ink-faint">{m.lockLabel}</span>
+                  <span className={`text-[11px] tabular ${active ? "text-gold-300" : "text-ink-muted"}`}>
+                    {apr !== null ? `${fmtApr(apr)} APR` : "— APR"}
+                  </span>
+                </div>
               </button>
             );
           })}
@@ -280,6 +320,30 @@ export default function MinePage() {
             You have the maximum number of open positions. Close one to open another.
           </p>
         )}
+
+        {amount && parsed > 0n && !exceedsWallet && !exceedsCap && (() => {
+          const selectedApr = aprForBoost(HARVEST_MODES[selectedMode].boostBps);
+          if (selectedApr === null || selectedApr <= 0) return null;
+          const amountNum = Number(amount);
+          if (!Number.isFinite(amountNum) || amountNum <= 0) return null;
+          const annualYield = amountNum * (selectedApr / 100);
+          const breakevenDays = 365 * (100 / selectedApr);
+          const dailyFdoge = fdogePrice !== null && fdogePrice > 0
+            ? (annualYield / 365) / fdogePrice
+            : null;
+          return (
+            <div className="mt-4 rounded-lg border border-gold-400/30 bg-gold-400/5 px-4 py-3 text-xs leading-relaxed">
+              <div className="text-gold-300 font-medium">Projection at current phase rate</div>
+              <div className="mt-1 text-ink-muted tabular">
+                {dailyFdoge !== null && <>~{dailyFdoge.toFixed(2)} fDOGE/day · </>}
+                ~${annualYield.toFixed(2)} / yr · breakeven in {fmtDays(breakevenDays)}
+              </div>
+              <div className="mt-0.5 text-ink-faint text-[10px]">
+                Before commitment-tier boost and adaptive multiplier. Phase rate changes as supply crosses thresholds.
+              </div>
+            </div>
+          );
+        })()}
 
         <p className="mt-4 text-xs text-ink-faint leading-relaxed max-w-2xl">
           Commitment tiers (by position size): {"<"}100 USDC = 1.00×. 100 to 999 = 1.10×. 1,000 to 4,999 = 1.25×. 5,000 and above = 1.50×.
@@ -415,6 +479,28 @@ function PositionCard({
           </div>
         </div>
       </div>
+
+      {/* Conversion progress — portion of original USDC that has flowed out. */}
+      {p.totalDeposited > 0n && (() => {
+        const flowed = p.totalDeposited - p.remaining;
+        const pct = Number((flowed * 10_000n) / p.totalDeposited) / 100;
+        return (
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+              <span>Converted</span>
+              <span className="tabular normal-case text-ink-muted">
+                {fmtUsd(flowed)} / {fmtUsd(p.totalDeposited)} USDC · {pct.toFixed(1)}%
+              </span>
+            </div>
+            <div className="mt-1.5 h-1 rounded-full bg-bg-base overflow-hidden">
+              <div
+                className="h-full bg-gold-400 transition-[width] duration-500"
+                style={{ width: `${Math.min(100, pct)}%` }}
+              />
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -442,6 +528,19 @@ function fmtNumber(n: number): string {
   if (n >= 1_000)     return (n / 1_000).toFixed(2) + "K";
   if (Math.abs(n) < 0.0001) return n.toExponential(2);
   return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+}
+function fmtApr(pct: number): string {
+  if (!Number.isFinite(pct)) return "—";
+  if (Math.abs(pct) >= 1_000_000) return `${(pct / 1_000_000).toFixed(1)}M%`;
+  if (Math.abs(pct) >= 1_000)     return `${(pct / 1_000).toFixed(1)}K%`;
+  if (Math.abs(pct) >= 10)        return `${pct.toFixed(0)}%`;
+  return `${pct.toFixed(2)}%`;
+}
+function fmtDays(d: number): string {
+  if (!Number.isFinite(d) || d <= 0) return "—";
+  if (d < 1)    return `${Math.round(d * 24)}h`;
+  if (d < 365)  return `${d.toFixed(1)}d`;
+  return `${(d / 365).toFixed(1)}y`;
 }
 function fmtDuration(secs: number): string {
   secs = Math.max(0, Math.floor(secs));
