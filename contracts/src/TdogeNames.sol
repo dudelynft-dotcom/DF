@@ -10,11 +10,11 @@ interface IMinerPositionCheck {
     function positionCount(address user) external view returns (uint256);
 }
 
-/// @title TdogeNames — on-chain .tdoge identity registry
+/// @title TdogeNames — on-chain .fdoge identity registry
 /// @notice A flat registry (not an NFT). Any user who has ever committed
-///         pathUSD to Miner is eligible to claim a unique `<name>.tdoge`
-///         identity for a small pathUSD fee. 100% of the fee is routed
-///         directly to the LiquidityManager to deepen TDOGE liquidity.
+///         USDC to Miner is eligible to claim a unique `<name>.fdoge`
+///         identity for a small USDC fee. 100% of the fee is routed
+///         directly to the LiquidityManager to deepen fDOGE liquidity.
 ///
 ///         This contract has no hooks into Miner emission or multipliers.
 ///         It is identity and status only. Future phases (PFP collection,
@@ -25,7 +25,7 @@ contract TdogeNames is Ownable, ReentrancyGuard {
     uint256 public constant MAX_SUPPLY = 5000;
     uint8   public constant NAME_MIN_LEN = 1;
     uint8   public constant NAME_MAX_LEN = 20;
-    string  public constant NAME_SUFFIX = ".tdoge";
+    string  public constant NAME_SUFFIX = ".fdoge";
 
     IERC20  public immutable pathUSD;
     IMinerPositionCheck public immutable miner;

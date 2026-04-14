@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @title DOGE — Tempo Doge (hybrid supply model)
+/// @title DOGE — Doge Forge fDOGE (hybrid supply model)
 /// @notice Phase 1: strict cap at 21,000,000 DOGE.
 ///         Phase 2: after initial cap is reached, controlled linear inflation
 ///                  (default 1,000,000 DOGE / year, admin-adjustable, hard-capped
@@ -38,7 +38,7 @@ contract DOGE is ERC20, Ownable {
     error FeeTooHigh();
     error InflationTooHigh();
 
-    constructor(address admin, address _feeTreasury) ERC20("Tempo Doge", "TDOGE") Ownable(admin) {
+    constructor(address admin, address _feeTreasury) ERC20("Doge Forge", "fDOGE") Ownable(admin) {
         feeTreasury = _feeTreasury;
         feeExempt[_feeTreasury] = true;
     }
