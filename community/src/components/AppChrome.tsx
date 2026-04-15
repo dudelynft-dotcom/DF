@@ -117,8 +117,8 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
             <a href="https://dogeforge.fun/TDOGEPAPER" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">
               Paper
             </a>
-            <a href="https://twitter.com/dogeforge" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">
-              X / @dogeforge
+            <a href="https://x.com/DogeForgefun" target="_blank" rel="noreferrer" className="hover:text-ink transition-colors">
+              X / @DogeForgefun
             </a>
           </div>
         </div>

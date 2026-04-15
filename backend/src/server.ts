@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { db } from "./db.js";
+import { community } from "./community.js";
 
 const app = express();
 app.use(cors());
@@ -10,6 +11,9 @@ app.use(express.json());
 const ADMIN = process.env.ADMIN_TOKEN ?? "";
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
+
+// Community points API.
+app.use("/community", community);
 
 /// GET /tokens?view=all|verified|unverified
 /// Returns discovered tokens. `hidden` tokens are always excluded.

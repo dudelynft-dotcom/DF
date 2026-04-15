@@ -50,4 +50,129 @@ CREATE TABLE IF NOT EXISTS price_cursor (
   pair        TEXT PRIMARY KEY,
   last_block  INTEGER NOT NULL
 );
+
+-- ============================================================
+-- Community points system (Season 1)
+-- ============================================================
+-- One row per verified X↔wallet binding. This is the canonical identity
+-- for the community app; every other table here FKs back to it.
+CREATE TABLE IF NOT EXISTS community_users (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  x_id        TEXT NOT NULL UNIQUE,       -- Twitter user id (numeric string)
+  x_handle    TEXT NOT NULL,
+  x_avatar    TEXT,
+  x_created   TEXT,                       -- ISO timestamp, for age checks
+  wallet      TEXT NOT NULL UNIQUE,       -- lowercased 0x address
+  referrer_id INTEGER REFERENCES community_users(id),
+  tier        TEXT NOT NULL DEFAULT 'bronze',
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_community_users_wallet ON community_users(wallet);
+
+-- Task catalog. Admin-defined. 'kind' categorises for the dashboard UI.
+-- 'payload' is free-form JSON for task-specific data (required handle,
+-- threshold amount, etc.)
+CREATE TABLE IF NOT EXISTS community_task_defs (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug             TEXT NOT NULL UNIQUE,
+  kind             TEXT NOT NULL,         -- social | trade | mine | identity | daily | quiz
+  title            TEXT NOT NULL,
+  description      TEXT NOT NULL,
+  points           INTEGER NOT NULL,
+  max_completions  INTEGER NOT NULL DEFAULT 1, -- -1 = unlimited (e.g. daily)
+  payload          TEXT NOT NULL DEFAULT '{}', -- JSON string
+  active           INTEGER NOT NULL DEFAULT 1,
+  sort_order       INTEGER NOT NULL DEFAULT 0
+);
+
+-- One row per (user, task, nth-completion) completion. Proof is the
+-- verification evidence (tweet id, tx hash, etc.) so we can audit.
+CREATE TABLE IF NOT EXISTS community_completions (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id        INTEGER NOT NULL REFERENCES community_users(id),
+  task_id        INTEGER NOT NULL REFERENCES community_task_defs(id),
+  completed_at   INTEGER NOT NULL,
+  proof          TEXT NOT NULL DEFAULT '{}',
+  points_awarded INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_completions_user ON community_completions(user_id, completed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_completions_task ON community_completions(task_id, completed_at DESC);
+
+-- Append-only points ledger. Users' point totals are sum(delta). Every
+-- mutation is traceable by ref_id — for completions it's completion.id,
+-- for referrals it's referee user_id, etc.
+CREATE TABLE IF NOT EXISTS community_points_ledger (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES community_users(id),
+  delta      INTEGER NOT NULL,         -- can be negative for corrections
+  reason     TEXT NOT NULL,            -- task | referral | streak | admin_adjustment
+  ref_id     INTEGER,                  -- fk interpretation depends on reason
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ledger_user ON community_points_ledger(user_id, created_at DESC);
+
+-- Daily tweet submissions. Tweet ids are globally unique on X; we index
+-- on (user, day) to enforce 1/day cadence at the DB layer.
+CREATE TABLE IF NOT EXISTS community_daily_tweets (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES community_users(id),
+  tweet_id   TEXT NOT NULL UNIQUE,
+  url        TEXT NOT NULL,
+  day        TEXT NOT NULL,            -- YYYY-MM-DD (UTC)
+  status     TEXT NOT NULL,            -- pending | verified | rejected
+  reason     TEXT,                     -- rejection detail if status=rejected
+  checked_at INTEGER,
+  UNIQUE (user_id, day)
+);
+
+-- Referral edges. referrer gets N% of referee's lifetime points.
+CREATE TABLE IF NOT EXISTS community_referrals (
+  referrer_id   INTEGER NOT NULL REFERENCES community_users(id),
+  referee_id    INTEGER NOT NULL REFERENCES community_users(id),
+  locked_in_at  INTEGER NOT NULL,
+  PRIMARY KEY (referrer_id, referee_id)
+);
+CREATE INDEX IF NOT EXISTS idx_referrals_referee ON community_referrals(referee_id);
 `);
+
+// ------------------------------------------------------------------
+// Seed the task catalog on first boot. Re-runnable: uses INSERT OR IGNORE
+// on the slug UNIQUE constraint. Editing a seeded row by hand in the DB
+// is fine; this never overwrites.
+// ------------------------------------------------------------------
+const seedTask = db.prepare(`
+  INSERT OR IGNORE INTO community_task_defs
+    (slug, kind, title, description, points, max_completions, payload, sort_order)
+  VALUES (@slug, @kind, @title, @description, @points, @max, json(@payload), @sort)
+`);
+const SEED = [
+  // --- Social (one-time) ---
+  { slug: "follow-x",        kind: "social", title: "Follow @DogeForgefun on X", description: "Follow the official DOGE FORGE account.", points: 100, max: 1, payload: '{"handle":"DogeForgefun"}', sort: 10 },
+  { slug: "follow-arc",      kind: "social", title: "Follow @arc_network on X",    description: "Follow the Arc network account.",         points: 50,  max: 1, payload: '{"handle":"arc_network"}',   sort: 11 },
+  { slug: "retweet-launch",  kind: "social", title: "Retweet the launch post",     description: "Retweet our pinned launch announcement.", points: 75,  max: 1, payload: '{}',                        sort: 12 },
+  { slug: "join-telegram",   kind: "social", title: "Join the Telegram",           description: "Hop in the community Telegram.",          points: 50,  max: 1, payload: '{}',                        sort: 13 },
+
+  // --- Trade volume tiers ---
+  { slug: "trade-100",   kind: "trade", title: "Trade $100 volume",   description: "Route $100 through the DOGE FORGE DEX.",   points: 150,  max: 1, payload: '{"thresholdUsd":100}',   sort: 20 },
+  { slug: "trade-1000",  kind: "trade", title: "Trade $1,000 volume", description: "Route $1,000 through the DOGE FORGE DEX.", points: 500,  max: 1, payload: '{"thresholdUsd":1000}',  sort: 21 },
+  { slug: "trade-5000",  kind: "trade", title: "Trade $5,000 volume", description: "Route $5,000 through the DOGE FORGE DEX.", points: 1500, max: 1, payload: '{"thresholdUsd":5000}',  sort: 22 },
+  { slug: "trade-25000", kind: "trade", title: "Trade $25,000 volume",description: "Whale tier: $25,000 total volume.",         points: 5000, max: 1, payload: '{"thresholdUsd":25000}', sort: 23 },
+
+  // --- Mine commitment tiers ---
+  { slug: "mine-100",   kind: "mine", title: "Mine with $100",   description: "Commit $100 USDC to the miner.",   points: 150,  max: 1, payload: '{"thresholdUsd":100}',   sort: 30 },
+  { slug: "mine-500",   kind: "mine", title: "Mine with $500",   description: "Commit $500 USDC to the miner.",   points: 400,  max: 1, payload: '{"thresholdUsd":500}',   sort: 31 },
+  { slug: "mine-1000",  kind: "mine", title: "Mine with $1,000", description: "Commit $1,000 USDC to the miner.", points: 800,  max: 1, payload: '{"thresholdUsd":1000}',  sort: 32 },
+  { slug: "mine-5000",  kind: "mine", title: "Mine with $5,000", description: "Commit $5,000 USDC to the miner.", points: 3000, max: 1, payload: '{"thresholdUsd":5000}',  sort: 33 },
+
+  // --- Identity ---
+  { slug: "claim-fdoge-name", kind: "identity", title: "Claim your .fdoge identity", description: "Register your on-chain name at TdogeNames.", points: 300, max: 1, payload: '{}', sort: 40 },
+
+  // --- Daily + streak ---
+  { slug: "daily-tweet",   kind: "daily", title: "Daily tweet",    description: "Tweet about DOGE FORGE daily with $FDOGE and @DogeForgefun. 1 per day.", points: 25, max: -1, payload: '{"requireTokens":["$FDOGE","@DogeForgefun"]}', sort: 50 },
+  { slug: "daily-checkin", kind: "daily", title: "Daily check-in", description: "Open the app daily. 7-day streak = +50 bonus, 30-day = +500.",            points: 5,  max: -1, payload: '{}',                                           sort: 51 },
+
+  // --- Quiz (Step 9) ---
+  { slug: "quiz-whitepaper", kind: "quiz", title: "Whitepaper quiz", description: "Read the paper, answer 5 questions. Unlocks once.", points: 200, max: 1, payload: '{}', sort: 60 },
+];
+
+for (const t of SEED) seedTask.run(t);

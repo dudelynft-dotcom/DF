@@ -112,12 +112,7 @@ export default function Connect() {
           </div>
         )}
 
-        <p className="mt-10 text-xs text-ink-faint text-center max-w-sm mx-auto">
-          Your X id and wallet are stored server-side to prevent sybil.
-          We do not post, follow, or DM on your behalf.
-        </p>
-
-        <div className="mt-6 text-center">
+        <div className="mt-10 text-center">
           <Link href="/" className="text-sm text-ink-muted hover:text-ink transition-colors">
             ← Back
           </Link>
