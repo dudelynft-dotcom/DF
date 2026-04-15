@@ -12,7 +12,7 @@
 import { Router, type Request, type Response } from "express";
 import crypto from "node:crypto";
 import { db } from "./db.js";
-import { getMineVolumeUsd, getTradeVolumeUsd, isKnownTask, runVerifier } from "./communityVerifiers.js";
+import { getMineVolumeUsd, getTradeVolumeUsd, isKnownTask, runVerifier, QUIZ_QUESTIONS } from "./communityVerifiers.js";
 
 export const community = Router();
 
@@ -252,6 +252,17 @@ community.get("/leaderboard", (req, res) => {
 });
 
 // ------------------------------------------------------------------
+// GET /community/quiz
+// Returns the question + options for the whitepaper quiz, with the
+// `correct` field stripped. The verifier holds the answer key.
+// ------------------------------------------------------------------
+community.get("/quiz", (_req, res) => {
+  res.json({
+    questions: QUIZ_QUESTIONS.map((q) => ({ q: q.q, options: q.options })),
+  });
+});
+
+// ------------------------------------------------------------------
 // POST /community/claim
 // Body: { xId, wallet, slug, ...verifier-specific fields }
 // HMAC over xId|wallet, same as bind-wallet.
@@ -329,7 +340,18 @@ community.post("/claim", async (req, res) => {
     `SELECT COALESCE(SUM(delta), 0) AS total FROM community_points_ledger WHERE user_id = ?`
   ).get(user.id) as { total: number };
 
-  res.json({ ok: true, awarded: result.points, total: total.total, proof: result.proof ?? {} });
+  // Tier auto-promotion. Thresholds chosen so most engaged Season 1
+  // accounts can reach Gold without the whale tasks; Diamond requires
+  // hitting the trade/mine $5k tier or the $25k whale.
+  const newTier =
+    total.total >= 25_000 ? "diamond" :
+    total.total >= 5_000  ? "gold" :
+    total.total >= 1_000  ? "silver" :
+    "bronze";
+  db.prepare(`UPDATE community_users SET tier = ? WHERE id = ? AND tier != ?`)
+    .run(newTier, user.id, newTier);
+
+  res.json({ ok: true, awarded: result.points, total: total.total, tier: newTier, proof: result.proof ?? {} });
 });
 
 function safeJson(s: string): unknown {

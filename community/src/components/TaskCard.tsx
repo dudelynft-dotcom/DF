@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 
 export type TaskCardData = {
@@ -122,6 +123,16 @@ export function TaskCard({
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-xs">
               <Check /> {status === "today" ? "Today" : "Claimed"}
             </span>
+          ) : task.slug === "quiz-whitepaper" ? (
+            <Link
+              href="/quiz"
+              className="
+                px-4 py-2 rounded-md text-sm font-medium transition-colors
+                bg-gold-400 text-bg-base hover:bg-gold-300
+              "
+            >
+              Start →
+            </Link>
           ) : task.slug === "daily-tweet" ? (
             // Tweet URL form — wider so it gets its own row on mobile.
             <div className="hidden sm:flex items-center gap-2">

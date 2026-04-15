@@ -9,6 +9,11 @@ type Me = {
   xAvatar?: string;
   wallet: `0x${string}` | null;
 } | null;
+type CommunityMe = {
+  points: number;
+  referrals: number;
+  tier: "bronze" | "silver" | "gold" | "diamond";
+} | null;
 
 // Profile surface. Until Step 3 writes real stats, this reflects the
 // live auth state:
@@ -16,13 +21,17 @@ type Me = {
 //   - session, no wallet → nudge to /connect step 2
 //   - session + wallet   → current account summary + "stats coming"
 export default function Profile() {
-  const [me, setMe] = useState<Me | undefined>(undefined);
+  const [me, setMe]   = useState<Me | undefined>(undefined);
+  const [stats, setStats] = useState<CommunityMe>(null);
 
   useEffect(() => {
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => setMe(j as Me))
-      .catch(() => setMe(null));
+    Promise.all([
+      fetch("/api/auth/me",      { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/community/me", { cache: "no-store" }).then((r) => r.json()),
+    ]).then(([m, c]) => {
+      setMe(m as Me);
+      setStats(c as CommunityMe);
+    }).catch(() => setMe(null));
   }, []);
 
   const onLogout = async () => {
@@ -97,8 +106,12 @@ export default function Profile() {
 
           <div className="sm:ml-auto text-right shrink-0">
             <div className="text-[11px] uppercase tracking-[0.25em] text-gold-400/90">Points</div>
-            <div className="font-display text-4xl tabular text-ink mt-1">0</div>
-            <div className="text-[11px] text-ink-faint">stats land in step 3</div>
+            <div className="font-display text-4xl tabular text-ink mt-1">
+              {(stats?.points ?? 0).toLocaleString()}
+            </div>
+            <div className="text-[11px] text-ink-faint">
+              {stats?.referrals ?? 0} referral{stats?.referrals === 1 ? "" : "s"}
+            </div>
           </div>
         </div>
 
@@ -119,12 +132,15 @@ export default function Profile() {
         </div>
       </div>
 
+      {/* Referral card — full width, prominent */}
+      <h2 className="mt-10 font-display text-xl tracking-tight">Refer & earn</h2>
+      <ReferralCard handle={me.xHandle} count={stats?.referrals ?? 0} />
+
       {/* Upcoming — placeholder cards that light up as Steps land */}
       <h2 className="mt-10 font-display text-xl tracking-tight">Coming soon</h2>
-      <div className="mt-4 grid sm:grid-cols-3 gap-3">
+      <div className="mt-4 grid sm:grid-cols-2 gap-3">
         <Upcoming n="03" title="Point history" body="Every point, every reason, every timestamp." />
-        <Upcoming n="08" title="Tier ring" body="Bronze → Silver → Gold → Diamond, by total points." />
-        <Upcoming n="08" title="Referral link" body="10% of every invitee's points, forever." />
+        <Upcoming n="08" title="Animated tier ring" body="Bronze → Silver → Gold → Diamond ring with progress." />
       </div>
 
       <div className="mt-12 text-right">
@@ -167,6 +183,55 @@ function LinkedRow({
               {cta.label}
             </Link>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReferralCard({ handle, count }: { handle: string; count: number }) {
+  const [copied, setCopied] = useState(false);
+  // Origin works in dev (localhost) and in prod (community.dogeforge.fun).
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://community.dogeforge.fun";
+  const link = `${origin}/?ref=@${handle}`;
+  const onCopy = async () => {
+    try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    catch { /* ignore */ }
+  };
+  const tweetText = encodeURIComponent(
+    `Mining $FDOGE on @DogeForgefun — Season 1 points are live. Connect via my link, you get a head start, I get 10%.\n\n${link}`
+  );
+  return (
+    <div className="mt-4 rounded-xl border border-line bg-bg-surface/60 p-5">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] uppercase tracking-[0.25em] text-ink-faint">Your link</div>
+          <div className="mt-2 font-mono text-sm text-ink truncate">{link}</div>
+          <div className="mt-2 text-xs text-ink-muted">
+            <span className="text-gold-300 font-medium">10%</span> of every referee&apos;s points,
+            credited to you on every claim. {count} signed up so far.
+          </div>
+        </div>
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            onClick={onCopy}
+            className="
+              px-3 py-2 rounded-md text-sm font-medium transition-colors
+              border border-line text-ink hover:border-gold-400/60 hover:bg-white/5
+            "
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+          <a
+            href={`https://x.com/intent/tweet?text=${tweetText}`}
+            target="_blank" rel="noreferrer"
+            className="
+              px-3 py-2 rounded-md text-sm font-medium transition-colors
+              bg-gold-400 text-bg-base hover:bg-gold-300
+            "
+          >
+            Share on X
+          </a>
         </div>
       </div>
     </div>

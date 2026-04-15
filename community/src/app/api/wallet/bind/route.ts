@@ -45,12 +45,15 @@ export async function POST(req: NextRequest) {
   // Persist to the shared backend. Uniqueness (one X, one wallet) is
   // enforced at the DB layer by UNIQUE constraints and surfaced as
   // 409s which we translate to the UI's error codes.
+  // Optional referrer code from the df_ref cookie set by RefCapture.
+  const referrerCode = req.cookies.get("df_ref")?.value;
   try {
     await bindWallet({
-      xId:      s.xId,
-      xHandle:  s.xHandle,
-      xAvatar:  s.xAvatar,
-      wallet:   wallet as `0x${string}`,
+      xId:          s.xId,
+      xHandle:      s.xHandle,
+      xAvatar:      s.xAvatar,
+      wallet:       wallet as `0x${string}`,
+      referrerCode: referrerCode || undefined,
     });
   } catch (e: unknown) {
     const msg = (e as Error)?.message ?? "";

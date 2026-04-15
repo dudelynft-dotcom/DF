@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Fraunces } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
 import { AppChrome } from "@/components/AppChrome";
 import { Providers } from "./providers";
+import { RefCapture } from "@/components/RefCapture";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const fraunces = Fraunces({
@@ -31,6 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${fraunces.variable}`}>
       <body className="font-sans">
+        <Suspense>
+          <RefCapture />
+        </Suspense>
         <Providers>
           <AppChrome>{children}</AppChrome>
         </Providers>

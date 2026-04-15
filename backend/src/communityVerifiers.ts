@@ -219,10 +219,66 @@ register("daily-tweet", async (user, task, body) => {
 });
 
 // ============================================================
-//                      QUIZ — stub (Step 9 wires answer check)
+//                      QUIZ — whitepaper recall, 5 questions
 // ============================================================
-register("quiz-whitepaper", async () => {
-  return { ok: false, reason: "quiz_not_live", meta: { eta: "step 9" } };
+// Body shape: { answers: number[] } — index per question.
+// All-or-nothing: any wrong answer rejects the submission with the
+// indices that were wrong (so the UI can highlight them).
+//
+// Single-attempt cap is enforced by community_completions.max=1 on the
+// task def; once awarded, the row exists and re-claims are blocked
+// upstream. Wrong submissions don't insert anything, so users can
+// retry — that's intentional: this is engagement, not a barrier.
+//
+// Question text is server-authoritative. A separate GET endpoint
+// exposes question + options (without correct indices) for the UI.
+
+export const QUIZ_QUESTIONS = [
+  {
+    q: "What is the hard cap on fDOGE supply?",
+    options: ["21,000,000", "210,000,000", "1,000,000,000", "Unlimited"],
+    correct: 1,
+  },
+  {
+    q: "How is gas paid on Arc?",
+    options: ["ETH", "Native ARC token", "USDC", "Free"],
+    correct: 2,
+  },
+  {
+    q: "Which contract holds the platform fee from each swap?",
+    options: ["Treasury EOA", "TdogePair", "LiquidityManager", "ForgeRouter"],
+    correct: 2,
+  },
+  {
+    q: "Mining converts what into fDOGE rewards?",
+    options: ["ETH commitments", "USDC commitments", "fDOGE itself", "NFT staking"],
+    correct: 1,
+  },
+  {
+    q: "What does the .fdoge identity registry require?",
+    options: [
+      "Pay USDC fee + at least one Miner commitment",
+      "Mint a free NFT",
+      "Hold 1,000 fDOGE",
+      "Be on a whitelist",
+    ],
+    correct: 0,
+  },
+];
+
+register("quiz-whitepaper", async (_user, task, body) => {
+  const submitted = (body as { answers?: unknown }).answers;
+  if (!Array.isArray(submitted) || submitted.length !== QUIZ_QUESTIONS.length) {
+    return { ok: false, reason: "bad_answers" };
+  }
+  const wrong: number[] = [];
+  for (let i = 0; i < QUIZ_QUESTIONS.length; i++) {
+    if (Number(submitted[i]) !== QUIZ_QUESTIONS[i].correct) wrong.push(i);
+  }
+  if (wrong.length > 0) {
+    return { ok: false, reason: "wrong_answers", meta: { wrongIndices: wrong, total: QUIZ_QUESTIONS.length } };
+  }
+  return { ok: true, points: task.points, proof: { passed: true } };
 });
 
 // ============================================================
