@@ -113,8 +113,9 @@ flowchart TB
         DOGE[DOGE.sol - fDOGE token]
         Miner[Miner.sol - positions and accrual]
         LM[LiquidityManager.sol]
-        Pair[TdogePair.sol - AMM]
-        Router[TdogeRouter.sol]
+        Factory[TdogeFactory.sol - pair registry]
+        Pair[TdogePair.sol - AMM per pair]
+        Router[ForgeRouter.sol - addLiquidity / swap / 0.10 percent fee]
         Names[TdogeNames.sol - .fdoge registry]
         USDC[(USDC - Arc native gas)]
     end
@@ -123,16 +124,18 @@ flowchart TB
     FE -->|read and write| Chain
 
     BE -->|read events| Chain
-    Indexer -->|track new contracts| API
-    FE -->|fetch token list| API
+    Indexer -->|track new contracts and Swap events| API
+    FE -->|fetch token list and candles| API
 
     Miner -->|mint fDOGE| DOGE
     Miner -->|95 percent flowed USDC| LM
     Miner -->|5 percent flowed USDC| USDC
     Miner -->|auto-flush + seedLiquidity| LM
     LM -->|mint fDOGE side| DOGE
-    LM -->|deposit pair| Pair
-    Router -->|swap| Pair
+    LM -->|deposit into fDOGE pair| Pair
+    Router -->|0.10 percent platform fee| LM
+    Router -->|swap / mint LP| Pair
+    Factory -->|deploys| Pair
     Names -->|claim fee| LM
 ```
 
@@ -143,8 +146,9 @@ flowchart TB
 | `DOGE.sol` | fDOGE ERC-20 token, capped + post-cap inflation, 0.1% transfer fee | Admin: tune fee within hard cap (max 0.2%), tune inflation within hard cap (max 5%/yr) |
 | `Miner.sol` | Multi-position mining, lazy accrual, harvest cooldown via mode | Admin: tune emission curve, multipliers, sinks, pause |
 | `LiquidityManager.sol` | Receives 95% USDC share from Miner; mints matching fDOGE; deposits into pair | Admin: set initial price, mint budget, sweep |
-| `TdogePair.sol` | Constant-product AMM for fDOGE / USDC with 0.30% LP fee | None — immutable pair, standard UniV2 mechanics |
-| `TdogeRouter.sol` | One-call swap helper for TdogePair | None — pure utility, no privileged state |
+| `TdogePair.sol` | Constant-product AMM per trading pair, 0.30% LP fee | None — immutable pair, standard UniV2 mechanics |
+| `TdogeFactory.sol` | Registry + deployer of `TdogePair` instances, keyed by sorted `(tokenA, tokenB)` | Admin: `registerPair` (bind pre-existing pairs into the map, once) |
+| `ForgeRouter.sol` | Multi-pair router: `addLiquidity`, `removeLiquidity`, path-based `swapExactTokensForTokens`; 0.10% platform fee skim on swap input → LM | Admin: toggle fee on/off, tune fee bps (max 0.50%), set fee recipient, pause, pair whitelist |
 | `TdogeNames.sol` | `.fdoge` identity registry, 5,000 cap, fee routes to LM | Admin: set cost, sink, open/close claims |
 
 ### 2.3 Trust Boundaries
@@ -555,9 +559,22 @@ The clamp on `multBps` is the safety rail. Even if adaptive misbehaves, an admin
 
 ### 8.1 The Constant-Product Pair
 
-`TdogePair.sol` implements a Uniswap V2-style AMM for fDOGE / USDC specifically. Token addresses are sorted at deploy. LP tokens are the pair contract itself (`DOGE FORGE LP`, symbol `DFLP`). 0.30% of every swap is retained by LPs through the standard k-invariant adjustment.
+`TdogePair.sol` implements a Uniswap V2-style AMM. Each pair is a standalone contract with two tokens sorted by address at construction, 0.30% LP fee retained by LPs through the standard k-invariant, and its own LP token (`DOGE FORGE LP`, symbol `DFLP`). The flagship fDOGE / USDC pair is the emission sink for the Miner → LiquidityManager flow; additional pairs (EURC/USDC, USYC/USDC, WUSDC/USDC, and any future token a user chooses to open) are deployed on demand via the factory.
 
-Why a custom AMM? Arc is a vanilla EVM with no enshrined DEX, so we deploy our own constant-product pair as a standard contract. UniswapV2-style mechanics are battle-tested across the EVM ecosystem and well-understood by both LPs and integrators.
+### 8.1b Factory & Router
+
+`TdogeFactory.sol` is a permissionless pair registry. Anyone can call `createPair(tokenA, tokenB)` to open a new market; the factory deterministically deploys a new `TdogePair` and stores it under the sorted-address key. It also exposes an admin-only `registerPair(a, b, pair)` used once at launch to absorb the fDOGE/USDC pair that predates the factory — the function verifies the external pair's `token0` / `token1` match before binding it to prevent accidental misrouting.
+
+`ForgeRouter.sol` is the user-facing entry point for every trade and liquidity action on the DEX:
+
+- `addLiquidity(tokenA, tokenB, …)` — creates the pair lazily if missing, quotes optimal amounts against current reserves, pulls funds, mints LP to the caller.
+- `removeLiquidity(…)` — burns LP and returns the two sides. Intentionally **not** pausable/whitelisted so users can always withdraw.
+- `swapExactTokensForTokens(amountIn, minOut, path, to, deadline)` — path-based (`[fDOGE, USDC]`, `[EURC, USDC]`, or any multi-hop) with standard V2 fee-adjusted math.
+- `getAmountsOut` / `getAmountsOutAfterFee` — view helpers the UI uses for live quotes.
+
+The router owns the protocol fee: on every swap it skims **0.10%** of the input token on entry, transfers it to the `LiquidityManager`, then forwards the remaining 99.90% into the pair chain. The fee is admin-toggleable and capped at 0.50%. fDOGE swaps pay the same 0.10% platform fee plus the standard 0.30% LP fee — since the protocol owns the fDOGE LP position, those LP fees accrue right back to LiquidityManager, so effectively every fDOGE trade rebates into the pool.
+
+Why a custom DEX? Arc is a young stablecoin-native L1 with no depth yet on third-party AMMs. Rather than route users through thin external pools (or ask them to trust an unaudited aggregator we don't control), DOGE FORGE owns the complete liquidity and trading layer. The stack is standard UniswapV2 mechanics — battle-tested since 2020 — plus two operational guardrails: a pause switch on swap/addLiquidity (never on removeLiquidity) and an optional pair-whitelist mode the admin can flip on during incident response.
 
 ### 8.2 Automated Liquidity Loop
 
@@ -626,27 +643,30 @@ The choice is post-launch and reversible. Until governance acts, all LP from min
 
 ```mermaid
 flowchart TD
-    U[User opens trade modal for token X] --> Q{fDOGE involved?}
-    Q -->|yes| AMM[Route via TdogeRouter to TdogePair]
-    Q -->|no| N[No native route — view-only]
-    AMM --> Tx[(swap tx)]
+    U[User opens trade modal for token X] --> Q{Factory.getPair token,USDC != 0}
+    Q -->|yes| R[ForgeRouter.swapExactTokensForTokens path=token,USDC]
+    R -->|0.10 percent input| LM[(LiquidityManager)]
+    R -->|99.90 percent| P[(TdogePair)]
+    Q -->|no| N[No route - pool not opened yet]
 ```
 
-The frontend determines the route at quote time. Approval is set on `TdogeRouter`. Settlement happens on Arc in a single transaction; DOGE FORGE never custodies funds during a swap. Tokens unrelated to fDOGE are surfaced for discovery but routed externally — the protocol does not operate a stablecoin orderbook itself.
+Every swap on DOGE FORGE goes through the same router, regardless of which pair. The frontend calls `Factory.getPair(token, USDC)` to verify a pool exists, then `ForgeRouter.getAmountsOutAfterFee` for the displayed quote. Approval is always set on the router. Settlement happens on Arc in a single transaction; DOGE FORGE never custodies funds during a swap — the router pulls the input, skims the 0.10% platform fee, and forwards the remainder into the pair chain in one atomic tx.
 
-### 9.2 TdogeRouter (AMM swaps)
+### 9.2 ForgeRouter (all swaps)
 
-`TdogeRouter.swapExactIn(tokenIn, amountIn, minOut, to, deadline)` does three things in one transaction:
+`ForgeRouter.swapExactTokensForTokens(amountIn, minOut, path, to, deadline)` executes:
 
-1. `transferFrom` the user's input token to the pair.
-2. Compute the output via the V2 fee-adjusted formula.
-3. Call `pair.swap(amount0Out, amount1Out, to)`.
+1. Verify every hop exists in the factory (and is whitelisted if admin has enabled whitelist mode).
+2. `transferFrom` the full input amount into the router.
+3. Skim `platformFeeBps` (default 0.10%) of the input, transfer to the fee recipient (LiquidityManager).
+4. Transfer the net input into the first pair and walk the path hop-by-hop via `pair.swap` — each intermediate output lands in the next pair, the final output in the user's `to` address.
+5. Revert if the final output is below `minOut` or the deadline has passed.
 
-The router holds no funds and has no privileged state. `getAmountOut` and `quote` view methods let the UI render slippage estimates without simulating a transaction.
+View helpers — `getAmountsOut(amountIn, path)` (pre-fee) and `getAmountsOutAfterFee(amountIn, path)` (post-fee) — let the UI quote without a simulation. The router itself holds no state for users; all balances live in the pair contracts.
 
-### 9.3 External Routing for Other Tokens
+### 9.3 Opening New Markets
 
-Stablecoin-to-stablecoin or arbitrary token swaps are out of scope for the DOGE FORGE AMM. The Trade page surfaces discovered tokens for visibility and verification but does not route swaps for them; users wanting to trade those assets use any Arc-deployed third-party DEX directly.
+`Factory.createPair(tokenA, tokenB)` is permissionless. Any user (or the router, lazily inside `addLiquidity`) can deploy a fresh `TdogePair` for any ERC-20 / ERC-20 combination. Once the pair exists, it shows up in the discovery index and becomes tradable as soon as someone seeds it with `ForgeRouter.addLiquidity`. The admin-only `registerPair` exists solely to bind the historical fDOGE/USDC pair into the map at launch; under normal operation it is never called.
 
 ### 9.4 Slippage Model
 
@@ -914,12 +934,12 @@ flowchart LR
     NM[Names claims] -->|100 percent of fee| LP
     TF[fDOGE transfer fee] -->|0.10 percent on every transfer| TR
     LPF[Pair LP fee] -->|0.30 percent on every swap| LP
-    AGG[ForgeAggregator] -->|0.10 percent on non-fDOGE swaps| LP
+    RTR[ForgeRouter] -->|0.10 percent platform fee on every swap| LP
 ```
 
-The split is intentional: **liquidity gets 100% of identity revenue, 95% of mining revenue, and 100% of aggregator fees**; treasury gets 5% of mining and the residual transfer fee revenue. Liquidity is treated as the primary public good of the protocol; treasury is an operational reserve.
+The split is intentional: **liquidity gets 100% of identity revenue, 95% of mining revenue, and 100% of platform swap fees**; treasury gets 5% of mining and the residual transfer fee revenue. Liquidity is treated as the primary public good of the protocol; treasury is an operational reserve.
 
-When users swap a non-fDOGE token (e.g. EURC ↔ USDC) the trade routes through `ForgeAggregator`, which skims **0.10%** of the input token, forwards it to `LiquidityManager`, and dispatches the remaining 99.90% into the underlying UniswapV2-compatible router (UnitFlow V2.5 on Arc). fDOGE swaps bypass the aggregator entirely — they trade directly against `TdogePair` and the protocol earns the standard 0.30% LP fee instead.
+Every swap — fDOGE or stablecoin-pair — routes through `ForgeRouter`, which skims **0.10%** of the input token and forwards it to `LiquidityManager`. The router itself holds no funds. For fDOGE trades the protocol additionally earns the 0.30% LP fee baked into `TdogePair` (because LM owns the LP position), so each fDOGE swap contributes **0.40%** back into the pool effectively. Stablecoin-pair swaps yield 0.10% to LM plus the 0.30% LP fee to whoever seeded that pair's liquidity.
 
 ### 15.2 Fee Routing
 
@@ -1037,9 +1057,13 @@ This whitepaper is not investment advice. DOGE FORGE is a permissionless protoco
 |---|---|
 | fDOGE | `0x25497e0aC492B79A3781fed41762F106f9158F71` |
 | Miner | `0x1574EEA1DA5e204CC035968D480aE51BF6505834` |
-| TdogePair | `0x96da2A3DeE82295e752bdE12541120ccCDFaf407` |
 | LiquidityManager | `0x7232883c1abC50DCfaae96394f55f14DF927CF38` |
-| TdogeRouter | `0x48ab91AdabF212C1Cb178aA3f5533D2193817A00` |
+| TdogeFactory | `0x75E4CBF4D804A15a945D5758d1b4976E1c6ceAE9` |
+| ForgeRouter | `0xfFBd254859ebF9fc4808410f95f8c4e7998846FB` |
+| fDOGE/USDC pair | `0x96da2A3DeE82295e752bdE12541120ccCDFaf407` |
+| EURC/USDC pair | `0xa699a07e68FE465d684374aF02FE6105B18B5209` |
+| USYC/USDC pair | `0x4D4C296190A360E3F5c946341fA90CA65Ef5574e` |
+| WUSDC/USDC pair | `0xFB75Dee2Cf4fB4c4CDD3486Fc28a4Fd9d13a3a2A` |
 | TdogeNames | `0x998ae581c462DA5aa161b5f89F4d4Fe40B5eab35` |
 | USDC (Arc predeploy) | `0x3600000000000000000000000000000000000000` |
 | Multicall3 | `0xcA11bde05977b3631167028862bE2a173976CA11` |
