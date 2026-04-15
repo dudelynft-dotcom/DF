@@ -113,10 +113,37 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
       <footer className="border-t border-line mt-16 sm:mt-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 text-[11px] sm:text-xs text-ink-faint flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <span>DOGE FORGE · Arc Network</span>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <Link href="/TDOGEPAPER" className="hover:text-gold-300 transition-colors">
               fDOGE Paper
             </Link>
+            <a
+              href="https://community.dogeforge.fun"
+              className="hover:text-gold-300 transition-colors"
+            >
+              Community ↗
+            </a>
+            <a
+              href="https://x.com/DogeForgefun"
+              target="_blank" rel="noreferrer"
+              className="hover:text-gold-300 transition-colors"
+            >
+              X / @DogeForgefun
+            </a>
+            <a
+              href="https://t.me/DogeForgeAnn"
+              target="_blank" rel="noreferrer"
+              className="hover:text-gold-300 transition-colors"
+            >
+              TG announcements
+            </a>
+            <a
+              href="https://t.me/dogeforge"
+              target="_blank" rel="noreferrer"
+              className="hover:text-gold-300 transition-colors"
+            >
+              TG community
+            </a>
             <span className="tabular">fDOGE · 210M initial cap · 0.1% transfer fee</span>
           </div>
         </div>

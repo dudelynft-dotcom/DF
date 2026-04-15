@@ -14,6 +14,7 @@ type Me = {
   completions: Record<string, { n: number; lastAt: number }>;
   referrals: number;
   volume?: { tradeUsd: number; mineUsd: number };
+  telegram?: { id: string; username: string | null } | null;
 } | null;
 
 type Filter = "all" | "social" | "trade" | "mine" | "identity" | "daily" | "quiz";
@@ -160,6 +161,8 @@ export default function Tasks() {
                   task={t}
                   onClaimed={onClaimed}
                   progressUsd={progressUsd}
+                  telegramLinked={!!me.telegram}
+                  onTelegramLinked={onClaimed}
                 />
               );
             })

@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { TelegramLoginButton } from "@/components/TelegramLoginButton";
 
 export type TaskCardData = {
   id:          number;
@@ -13,6 +14,8 @@ export type TaskCardData = {
   payload:     Record<string, unknown>;
   completion:  { n: number; lastAt: number } | null;
 };
+
+const TG_BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
 
 const KIND_LABEL: Record<TaskCardData["kind"], string> = {
   social: "Social", trade: "Trade", mine: "Mine",
@@ -29,13 +32,16 @@ const KIND_TONE: Record<TaskCardData["kind"], string> = {
 };
 
 export function TaskCard({
-  task, onClaimed, disabled, progressUsd,
+  task, onClaimed, disabled, progressUsd, telegramLinked, onTelegramLinked,
 }: {
   task: TaskCardData;
   onClaimed: (awarded: number, total: number) => void;
   disabled?: boolean;
   /** For trade/mine tasks: current USD volume the user has accumulated. */
   progressUsd?: number;
+  /** True once the user has linked their Telegram (from /community/me). */
+  telegramLinked?: boolean;
+  onTelegramLinked?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState<string | null>(null);
@@ -123,6 +129,14 @@ export function TaskCard({
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-xs">
               <Check /> {status === "today" ? "Today" : "Claimed"}
             </span>
+          ) : (task.slug === "join-tg-channel" || task.slug === "join-tg-group") ? (
+            <TelegramCta
+              task={task}
+              telegramLinked={!!telegramLinked}
+              busy={busy}
+              onLink={onTelegramLinked}
+              onClaim={onClaim}
+            />
           ) : task.slug === "quiz-whitepaper" ? (
             <Link
               href="/quiz"
@@ -233,6 +247,10 @@ function friendly(reason?: string, meta?: Record<string, unknown>): string {
     case "rpc_error":               return "Couldn't reach the chain. Try again in a moment.";
     case "not_authenticated":       return "Session expired. Reconnect.";
     case "rate_limited":            return "Slow down — too many claims in a minute.";
+    case "telegram_not_linked":     return "Link your Telegram first (button above).";
+    case "not_in_chat":              return "You're not a member of that chat yet.";
+    case "chat_not_configured":      return "Chat not configured on backend.";
+    case "telegram_api_error":       return "Telegram API rejected the check.";
     default:                        return reason ?? "Something went wrong.";
   }
 }
@@ -242,6 +260,64 @@ function Check() {
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
       <path d="M5 12l5 5L20 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
+  );
+}
+
+function TelegramCta({
+  task, telegramLinked, busy, onClaim, onLink,
+}: {
+  task: TaskCardData;
+  telegramLinked: boolean;
+  busy: boolean;
+  onClaim: () => void;
+  onLink?: () => void;
+}) {
+  const url = (task.payload as { url?: string })?.url;
+
+  // Not linked yet → directly render the Telegram Login Widget so the
+  // user can link in place without leaving the dashboard.
+  if (!telegramLinked) {
+    if (!TG_BOT_USERNAME) {
+      return <span className="text-xs text-amber-300">TG bot not configured</span>;
+    }
+    return (
+      <div className="flex items-center gap-2">
+        <TelegramLoginButton
+          botUsername={TG_BOT_USERNAME}
+          disabled={busy}
+          onLinked={() => onLink?.()}
+        />
+      </div>
+    );
+  }
+
+  // Linked → show "Open chat" + "Claim".
+  return (
+    <div className="flex items-center gap-2">
+      {url && (
+        <a
+          href={url}
+          target="_blank" rel="noreferrer"
+          className="
+            px-3 py-2 rounded-md text-sm font-medium transition-colors
+            border border-line text-ink hover:border-gold-400/60 hover:bg-white/5
+          "
+        >
+          Open ↗
+        </a>
+      )}
+      <button
+        onClick={onClaim}
+        disabled={busy}
+        className="
+          px-4 py-2 rounded-md text-sm font-medium transition-colors
+          bg-gold-400 text-bg-base hover:bg-gold-300
+          disabled:opacity-50 disabled:cursor-not-allowed
+        "
+      >
+        {busy ? (<span className="inline-flex items-center gap-1.5"><Spinner /> Verifying</span>) : "Claim"}
+      </button>
+    </div>
   );
 }
 

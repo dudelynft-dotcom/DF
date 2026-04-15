@@ -173,7 +173,8 @@ const SEED = [
   // --- Social (one-time) ---
   { slug: "follow-x",        kind: "social", title: "Follow @DogeForgefun on X", description: "Follow the official DOGE FORGE account.", points: 100, max: 1, payload: '{"handle":"DogeForgefun"}', sort: 10 },
   { slug: "retweet-launch",  kind: "social", title: "Retweet the launch post",     description: "Retweet our pinned launch announcement.", points: 75,  max: 1, payload: '{}',                        sort: 12 },
-  { slug: "join-telegram",   kind: "social", title: "Join the Telegram",           description: "Hop in the community Telegram.",          points: 50,  max: 1, payload: '{}',                        sort: 13 },
+  { slug: "join-tg-channel", kind: "social", title: "Join the official Telegram channel", description: "Announcements channel. Link your Telegram first; we verify membership on-chain via bot.", points: 100, max: 1, payload: '{"chat":"@DogeForgeAnn","url":"https://t.me/DogeForgeAnn"}', sort: 13 },
+  { slug: "join-tg-group",   kind: "social", title: "Join the Telegram community",        description: "Community chat. Link Telegram first; verified via bot, no self-attest.",                points: 75,  max: 1, payload: '{"chat":"@dogeforge","url":"https://t.me/dogeforge"}',    sort: 14 },
 
   // --- Trade volume tiers ---
   { slug: "trade-100",   kind: "trade", title: "Trade $100 volume",   description: "Route $100 through the DOGE FORGE DEX.",   points: 150,  max: 1, payload: '{"thresholdUsd":100}',   sort: 20 },
@@ -202,4 +203,16 @@ for (const t of SEED) seedTask.run(t);
 
 // One-off migrations for previously-seeded rows. Safe to re-run.
 db.prepare(`UPDATE community_task_defs SET active = 0 WHERE slug = 'follow-arc'`).run();
+db.prepare(`UPDATE community_task_defs SET active = 0 WHERE slug = 'join-telegram'`).run();
 db.prepare(`UPDATE community_task_defs SET points = 100 WHERE slug = 'daily-tweet'`).run();
+
+// Add tg_user_id / tg_username columns. SQLite has no
+// ALTER IF NOT EXISTS — introspect PRAGMA first.
+const cols = db.prepare(`PRAGMA table_info(community_users)`).all() as Array<{ name: string }>;
+if (!cols.some((c) => c.name === "tg_user_id")) {
+  db.exec(`ALTER TABLE community_users ADD COLUMN tg_user_id TEXT`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_community_users_tg ON community_users(tg_user_id) WHERE tg_user_id IS NOT NULL`);
+}
+if (!cols.some((c) => c.name === "tg_username")) {
+  db.exec(`ALTER TABLE community_users ADD COLUMN tg_username TEXT`);
+}

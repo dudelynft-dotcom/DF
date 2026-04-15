@@ -14,6 +14,7 @@
 
 import { createPublicClient, http, defineChain, getAddress } from "viem";
 import { db } from "./db.js";
+import { isChatMember } from "./telegram.js";
 
 // ---------- arc client (lazy) ----------
 const arc = defineChain({
@@ -80,7 +81,31 @@ async function socialSelfAttest(_u: User, t: Task, _b: Record<string, unknown>):
 register("follow-x",       socialSelfAttest);
 register("follow-arc",     socialSelfAttest);
 register("retweet-launch", socialSelfAttest);
-register("join-telegram",  socialSelfAttest);
+register("join-telegram",  socialSelfAttest); // legacy, deactivated in migration
+
+// Telegram membership — real verification via bot getChatMember.
+// Requires the user to have linked their Telegram first (stored in
+// community_users.tg_user_id). If not linked, return a structured
+// error the UI converts into a "Link Telegram first" prompt.
+async function tgMembershipVerifier(user: User, task: Task): Promise<VerifyResult> {
+  const row = db.prepare(
+    `SELECT tg_user_id FROM community_users WHERE id = ?`
+  ).get(user.id) as { tg_user_id: string | null } | undefined;
+  if (!row?.tg_user_id) {
+    return { ok: false, reason: "telegram_not_linked" };
+  }
+  const chat = (safeJson(task.payload) as { chat?: string }).chat;
+  if (!chat) return { ok: false, reason: "chat_not_configured" };
+  try {
+    const joined = await isChatMember(chat, row.tg_user_id);
+    if (!joined) return { ok: false, reason: "not_in_chat", meta: { chat } };
+    return { ok: true, points: task.points, proof: { chat, tgUserId: row.tg_user_id } };
+  } catch (e: unknown) {
+    return { ok: false, reason: "telegram_api_error", meta: { msg: (e as Error)?.message } };
+  }
+}
+register("join-tg-channel", tgMembershipVerifier);
+register("join-tg-group",   tgMembershipVerifier);
 
 // ============================================================
 //                      IDENTITY — on-chain

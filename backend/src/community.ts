@@ -13,6 +13,7 @@ import { Router, type Request, type Response } from "express";
 import crypto from "node:crypto";
 import { db } from "./db.js";
 import { getMineVolumeUsd, getTradeVolumeUsd, isKnownTask, runVerifier, QUIZ_QUESTIONS } from "./communityVerifiers.js";
+import { verifyTgLogin, type TgLoginPayload } from "./telegram.js";
 
 // Simple in-memory rate limiter. Sliding window, per (xId OR IP) key.
 // Memory grows in proportion to active callers — fine at testnet scale.
@@ -145,11 +146,13 @@ community.get("/me", (req, res) => {
   if (!xId || !wallet) return res.status(400).json({ error: "missing_params" });
 
   const user = db.prepare(
-    `SELECT id, x_id, x_handle, x_avatar, wallet, tier, created_at, referrer_id
+    `SELECT id, x_id, x_handle, x_avatar, wallet, tier, created_at, referrer_id,
+            tg_user_id, tg_username
      FROM community_users WHERE x_id = ? AND wallet = ?`
   ).get(xId, wallet) as {
     id: number; x_id: string; x_handle: string; x_avatar: string | null;
     wallet: string; tier: string; created_at: number; referrer_id: number | null;
+    tg_user_id: string | null; tg_username: string | null;
   } | undefined;
   if (!user) return res.json(null);
 
@@ -182,6 +185,9 @@ community.get("/me", (req, res) => {
       tradeUsd: getTradeVolumeUsd(user.wallet),
       mineUsd:  getMineVolumeUsd(user.wallet),
     },
+    telegram: user.tg_user_id
+      ? { id: user.tg_user_id, username: user.tg_username }
+      : null,
   });
 });
 
@@ -280,6 +286,40 @@ community.get("/leaderboard", (req, res) => {
         points: r.pts,
       })),
   });
+});
+
+// ------------------------------------------------------------------
+// POST /community/link-telegram
+// Body: { xId, wallet, tg: { id, first_name, username, auth_date, hash, ... } }
+// HMAC over xId|wallet as usual. The inner `tg` object comes straight
+// from the Telegram Login Widget callback — we re-verify its signature
+// server-side so a malicious client can't fake a Telegram ID.
+// ------------------------------------------------------------------
+community.post("/link-telegram", (req, res) => {
+  if (!verifyCaller(req, res)) return;
+  const { xId, wallet, tg } = req.body as { xId: string; wallet: string; tg: TgLoginPayload };
+  if (!tg?.hash) return res.status(400).json({ error: "missing_tg_payload" });
+
+  const verified = verifyTgLogin(tg);
+  if (!verified) return res.status(400).json({ error: "bad_tg_signature" });
+
+  const user = db.prepare(
+    `SELECT id FROM community_users WHERE x_id = ? AND wallet = ?`
+  ).get(xId, wallet.toLowerCase()) as { id: number } | undefined;
+  if (!user) return res.status(404).json({ error: "user_not_bound" });
+
+  // One-tg-per-user enforcement: reject if this tg_user_id already
+  // belongs to a different community user.
+  const dup = db.prepare(
+    `SELECT id FROM community_users WHERE tg_user_id = ? AND id != ?`
+  ).get(verified.id, user.id) as { id: number } | undefined;
+  if (dup) return res.status(409).json({ error: "telegram_already_linked" });
+
+  db.prepare(
+    `UPDATE community_users SET tg_user_id = ?, tg_username = ? WHERE id = ?`
+  ).run(verified.id, verified.username ?? null, user.id);
+
+  res.json({ ok: true, tgUserId: verified.id, tgUsername: verified.username ?? null });
 });
 
 // ------------------------------------------------------------------
