@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { background: #0E0D08; color: #F5ECD0; }
+body { min-height: 100dvh; }
+
+::selection { background: rgba(201, 163, 74, 0.35); color: #F5ECD0; }
+
+.hairline {
+  background: linear-gradient(90deg, transparent, rgba(201,163,74,0.35), transparent);
+  height: 1px;
+}
+
+/* Radial spotlight used by the landing hero. Pure CSS so no image
+   loads block first paint. */
+.bg-hero-glow {
+  background:
+    radial-gradient(60% 50% at 50% 30%, rgba(201,163,74,0.12) 0%, transparent 70%),
+    radial-gradient(80% 60% at 50% 110%, rgba(201,163,74,0.05) 0%, transparent 70%);
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
