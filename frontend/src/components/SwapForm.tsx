@@ -218,7 +218,7 @@ export function SwapForm({
         <Row label="Route">
           <span className="text-ink-muted">
             {effectiveRoute === "tdoge-amm" ? "DOGE FORGE AMM"
-              : effectiveRoute === "unitflow" ? (HAS_AGGREGATOR ? "DOGE FORGE → UnitFlow (0.10% fee)" : "UnitFlow V2.5")
+              : effectiveRoute === "unitflow" ? (HAS_AGGREGATOR ? "DOGE FORGE Aggregator (0.10% fee)" : "DOGE FORGE Aggregator")
               : "No route"}
           </span>
         </Row>
@@ -254,7 +254,7 @@ export function SwapForm({
           </div>
         ) : effectiveRoute === "none" ? (
           <div className="rounded-md border border-line bg-bg-base px-3 py-2.5 text-[11px] text-ink-muted leading-relaxed">
-            No UnitFlow pair for {token.symbol}/USDC yet. Liquidity must be seeded before this pair is tradable.
+            {token.symbol}/USDC has no liquidity yet. A pool must be seeded before this pair is tradable.
           </div>
         ) : needsApproval ? (
           <button

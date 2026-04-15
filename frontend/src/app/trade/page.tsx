@@ -400,7 +400,7 @@ function TokenCard({
             <button
               onClick={onTrade}
               className="px-3 py-1.5 rounded-md bg-gold-400 text-bg-base text-xs font-semibold hover:bg-gold-300 transition-colors"
-              title="Routes through DOGE FORGE AMM (fDOGE) or UnitFlow V2.5 (others)"
+              title="Routes through DOGE FORGE AMM (fDOGE) or DOGE FORGE Aggregator (others)"
             >
               Trade
             </button>
@@ -777,7 +777,7 @@ function UnverifiedCard({ token, onTrade }: { token: TileToken; onTrade: () => v
           <button
             onClick={onTrade}
             className="px-3 py-1.5 rounded-md border border-gold-400/60 text-ink text-xs hover:bg-gold-400/10 transition-colors"
-            title="Attempts to route via UnitFlow V2.5; will show 'no liquidity' if no pair exists"
+            title="Routes via DOGE FORGE Aggregator; shows 'no liquidity' if the pool isn't seeded yet"
           >
             Trade
           </button>
