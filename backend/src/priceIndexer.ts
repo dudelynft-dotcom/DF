@@ -9,8 +9,8 @@ import { db } from "./db.js";
  * configurable list of Uniswap-V2-style pair contracts:
  *
  *   1. `PAIR_ADDRESS`             — our own TdogePair (fDOGE/USDC).
- *   2. Auto-resolved UnitFlow pairs for each `TRACKED_TOKEN_*` env entry,
- *      paired against USDC via `UnitFlowFactory.getPair(token, USDC)`.
+ *   2. Auto-resolved pairs for each `TRACKED_TOKENS` entry, paired against
+ *      USDC via `TdogeFactory.getPair(token, USDC)`.
  *
  * Every Swap's execution price is decimal-adjusted using the pair's own
  * token0/token1 decimals (read once at startup per pair) so candles express
@@ -26,14 +26,19 @@ const START   = BigInt(process.env.PRICE_INDEXER_START_BLOCK ?? "0");
 
 const OUR_PAIR = (process.env.PAIR_ADDRESS ?? "").toLowerCase();
 
-// UnitFlow V2.5 on Arc (override via env).
-const UNITFLOW_FACTORY = (process.env.UNITFLOW_FACTORY_ADDRESS
-  ?? "0xd67F63A4F26a497b364d1C82e6747Aec8B5743a5").toLowerCase();
+// DOGE FORGE's own factory on Arc (TdogeFactory). Override via env.
+const FACTORY = (process.env.FACTORY_ADDRESS
+  ?? process.env.FACTORY_ADDRESS  // back-compat if env not yet updated
+  ?? "").toLowerCase();
+if (!FACTORY) {
+  console.error("[price] FACTORY_ADDRESS not set — cannot resolve pairs.");
+  process.exit(0);
+}
 const USDC = (process.env.USDC_ADDRESS
   ?? "0x3600000000000000000000000000000000000000").toLowerCase();
 
-/// Tokens we want UnitFlow charts for. Paired against USDC via factory.
-/// Comma-separated addresses. Default = Arc predeployed stables + UnitFlow WUSDC.
+/// Tokens we want charts for. Paired against USDC via our factory.
+/// Comma-separated addresses. Default = Arc predeployed stables + WUSDC.
 const TRACKED_TOKENS = (process.env.TRACKED_TOKENS ??
   [
     "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", // EURC
@@ -115,7 +120,7 @@ async function loadPairMetadata(addr: string, label: string): Promise<TrackedPai
 async function resolveUnitflowPair(token: string): Promise<string | null> {
   try {
     const p = await client.readContract({
-      address: UNITFLOW_FACTORY as `0x${string}`,
+      address: FACTORY as `0x${string}`,
       abi: factoryAbi,
       functionName: "getPair",
       args: [token as `0x${string}`, USDC as `0x${string}`],
@@ -133,14 +138,14 @@ async function bootstrapPairs() {
     const p = await loadPairMetadata(OUR_PAIR, "DOGE FORGE fDOGE/USDC");
     if (p) { tracked.push(p); trackedByAddr[p.address] = p; }
   }
-  // UnitFlow pairs for each tracked token vs USDC.
+  // Factory-resolved pairs for each tracked token vs USDC.
   for (const token of TRACKED_TOKENS) {
     const pairAddr = await resolveUnitflowPair(token);
     if (!pairAddr) {
-      console.log(`[price] no UnitFlow pair for ${token} / USDC (skip)`);
+      console.log(`[price] no pair registered for ${token} / USDC (skip)`);
       continue;
     }
-    const p = await loadPairMetadata(pairAddr, `UnitFlow ${token}/USDC`);
+    const p = await loadPairMetadata(pairAddr, `${token}/USDC`);
     if (p) { tracked.push(p); trackedByAddr[p.address] = p; }
   }
   if (tracked.length === 0) {
@@ -198,7 +203,7 @@ async function tick() {
 }
 
 async function main() {
-  console.log(`[price] RPC=${RPC} poll=${POLL_MS}ms range=${RANGE} factory=${UNITFLOW_FACTORY}`);
+  console.log(`[price] RPC=${RPC} poll=${POLL_MS}ms range=${RANGE} factory=${FACTORY}`);
   await bootstrapPairs();
   console.log(`[price] tracking ${tracked.length} pair(s)`);
   // eslint-disable-next-line no-constant-condition
