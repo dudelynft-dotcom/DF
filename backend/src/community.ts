@@ -14,6 +14,22 @@ import crypto from "node:crypto";
 import { db } from "./db.js";
 import { getMineVolumeUsd, getTradeVolumeUsd, isKnownTask, runVerifier, QUIZ_QUESTIONS } from "./communityVerifiers.js";
 
+// Simple in-memory rate limiter. Sliding window, per (xId OR IP) key.
+// Memory grows in proportion to active callers — fine at testnet scale.
+// For prod with a multi-process deploy, swap for a shared Redis ZSET.
+const RL_WINDOW_MS = 60_000;       // 1 minute
+const RL_MAX       = 10;           // max claims per minute per key
+const rlLog = new Map<string, number[]>();
+function rateLimit(key: string): boolean {
+  const now = Date.now();
+  const arr = rlLog.get(key) ?? [];
+  const kept = arr.filter((t) => t > now - RL_WINDOW_MS);
+  if (kept.length >= RL_MAX) return false;
+  kept.push(now);
+  rlLog.set(key, kept);
+  return true;
+}
+
 export const community = Router();
 
 function sharedSecret(): Buffer {
@@ -295,6 +311,13 @@ community.post("/claim", async (req, res) => {
   if (!slug) return res.status(400).json({ error: "missing_slug" });
   if (!isKnownTask(slug)) return res.status(404).json({ error: "unknown_slug" });
 
+  // Rate limit by xId (primary) with a fallback on remote IP for
+  // defence-in-depth. 10 claims / minute / key. Prevents script farmers.
+  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0].trim() || req.socket.remoteAddress || "unknown";
+  if (!rateLimit(`x:${xId}`) || !rateLimit(`ip:${ip}`)) {
+    return res.status(429).json({ error: "rate_limited" });
+  }
+
   const user = db.prepare(
     `SELECT id, x_id, x_handle, wallet FROM community_users WHERE x_id = ? AND wallet = ?`
   ).get(xId, wallet.toLowerCase()) as
@@ -367,6 +390,94 @@ community.post("/claim", async (req, res) => {
     .run(newTier, user.id, newTier);
 
   res.json({ ok: true, awarded: result.points, total: total.total, tier: newTier, proof: result.proof ?? {} });
+});
+
+// ------------------------------------------------------------------
+//                          ADMIN
+// ------------------------------------------------------------------
+// Auth: Bearer <ADMIN_TOKEN>. Shared with the rest of /admin/* routes
+// in server.ts so there's only one admin credential to rotate.
+function requireAdmin(req: import("express").Request, res: import("express").Response): boolean {
+  const expected = process.env.ADMIN_TOKEN ?? "";
+  if (!expected) { res.status(503).json({ error: "admin_disabled" }); return false; }
+  if (req.headers.authorization !== `Bearer ${expected}`) {
+    res.status(401).json({ error: "unauthorized" });
+    return false;
+  }
+  return true;
+}
+
+/// GET /community/admin/users — full user list with points + tier + volume.
+community.get("/admin/users", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const rows = db.prepare(
+    `SELECT u.id, u.x_id, u.x_handle, u.x_avatar, u.wallet, u.tier, u.created_at, u.referrer_id,
+            COALESCE(p.total, 0) AS points
+     FROM community_users u
+     LEFT JOIN (
+       SELECT user_id, SUM(delta) AS total FROM community_points_ledger GROUP BY user_id
+     ) p ON p.user_id = u.id
+     ORDER BY points DESC, u.created_at ASC`
+  ).all() as Array<{
+    id: number; x_id: string; x_handle: string; x_avatar: string | null;
+    wallet: string; tier: string; created_at: number; referrer_id: number | null; points: number;
+  }>;
+  res.json({
+    users: rows.map((r) => ({
+      id: r.id, xId: r.x_id, xHandle: r.x_handle, xAvatar: r.x_avatar,
+      wallet: r.wallet, tier: r.tier, createdAt: r.created_at,
+      referrerId: r.referrer_id, points: r.points,
+      volume: { tradeUsd: getTradeVolumeUsd(r.wallet), mineUsd: getMineVolumeUsd(r.wallet) },
+    })),
+  });
+});
+
+/// POST /community/admin/adjust { userId, delta, reason }
+/// Append a manual points adjustment. Ledger is append-only — never
+/// update-in-place; reversing a bad award means a new negative-delta row.
+community.post("/admin/adjust", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { userId, delta, reason } = req.body as { userId: number; delta: number; reason: string };
+  if (!Number.isInteger(userId) || userId <= 0)       return res.status(400).json({ error: "bad_user_id" });
+  if (!Number.isInteger(delta) || delta === 0)        return res.status(400).json({ error: "bad_delta" });
+  if (typeof reason !== "string" || reason.length < 1) return res.status(400).json({ error: "missing_reason" });
+
+  const user = db.prepare(`SELECT id FROM community_users WHERE id = ?`).get(userId) as { id: number } | undefined;
+  if (!user) return res.status(404).json({ error: "user_not_found" });
+
+  db.prepare(
+    `INSERT INTO community_points_ledger (user_id, delta, reason, ref_id, created_at)
+     VALUES (?, ?, ?, NULL, ?)`
+  ).run(userId, delta, `admin:${reason}`.slice(0, 200), Math.floor(Date.now() / 1000));
+
+  const total = db.prepare(
+    `SELECT COALESCE(SUM(delta), 0) AS total FROM community_points_ledger WHERE user_id = ?`
+  ).get(userId) as { total: number };
+  res.json({ ok: true, total: total.total });
+});
+
+/// GET /community/admin/tasks — task catalog with per-task claim counts.
+community.get("/admin/tasks", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const rows = db.prepare(
+    `SELECT t.id, t.slug, t.kind, t.title, t.points, t.max_completions, t.active, t.sort_order,
+            COALESCE(c.n, 0) AS claim_count
+     FROM community_task_defs t
+     LEFT JOIN (
+       SELECT task_id, COUNT(*) AS n FROM community_completions GROUP BY task_id
+     ) c ON c.task_id = t.id
+     ORDER BY t.sort_order ASC`
+  ).all();
+  res.json({ tasks: rows });
+});
+
+/// POST /community/admin/task-active { taskId, active }
+community.post("/admin/task-active", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { taskId, active } = req.body as { taskId: number; active: boolean };
+  if (!Number.isInteger(taskId)) return res.status(400).json({ error: "bad_task_id" });
+  db.prepare(`UPDATE community_task_defs SET active = ? WHERE id = ?`).run(active ? 1 : 0, taskId);
+  res.json({ ok: true });
 });
 
 function safeJson(s: string): unknown {

@@ -77,10 +77,6 @@ export default function Home() {
             </Link>
           </div>
 
-          <p className="mt-6 text-xs text-ink-faint max-w-md">
-            Points have no monetary value today. Future utility — including
-            a possible community token on mainnet — is not guaranteed.
-          </p>
         </div>
       </section>
 
@@ -113,12 +109,16 @@ export default function Home() {
             your activity.
           </p>
           <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            <Cat label="Social"   count="8"  hint="Follow, tweet, retweet" />
+            <Cat label="Social"   count="3"  hint="Follow, tweet, join TG" />
             <Cat label="Trade"    count="4"  hint="Volume milestones" />
-            <Cat label="Mine"     count="5"  hint="Commitment milestones" />
+            <Cat label="Mine"     count="4"  hint="Commitment milestones" />
             <Cat label="Identity" count="1"  hint=".fdoge name claim" />
             <Cat label="Daily"    count="∞"  hint="Streak + daily tweet" />
           </div>
+          <p className="mt-6 text-sm text-ink-muted">
+            Heads up: claiming a <span className="text-gold-300">.fdoge</span> identity on the main app
+            unlocks one of the highest-point tasks here — +300 points, one-time.
+          </p>
         </div>
       </section>
 

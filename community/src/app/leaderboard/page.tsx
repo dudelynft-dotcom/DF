@@ -140,6 +140,7 @@ export default function Leaderboard() {
 
 function Row({ entry, mine }: { entry: Entry; mine: boolean }) {
   const rankClass = entry.rank === 1 ? "text-gold-300" : entry.rank <= 3 ? "text-gold-400" : "text-ink-faint";
+  const medal = entry.rank === 1 ? "🥇" : entry.rank === 2 ? "🥈" : entry.rank === 3 ? "🥉" : null;
   return (
     <li
       className={`
@@ -148,8 +149,9 @@ function Row({ entry, mine }: { entry: Entry; mine: boolean }) {
         ${mine ? "bg-gold-400/[0.06]" : ""}
       `}
     >
-      <div className={`font-display tabular text-lg ${rankClass}`}>
-        {entry.rank}
+      <div className={`font-display tabular text-lg ${rankClass} flex items-center gap-1`}>
+        {medal && <span aria-hidden className="text-base leading-none">{medal}</span>}
+        <span>{entry.rank}</span>
       </div>
       <div className="flex items-center gap-3 min-w-0">
         {entry.xAvatar ? (

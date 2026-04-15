@@ -12,8 +12,7 @@
 //     Future tightening with full X follower-graph API ($).
 //   - cadence (daily-checkin, daily-tweet): timestamp gates.
 
-import { createPublicClient, http, getContract } from "viem";
-import { defineChain } from "viem";
+import { createPublicClient, http, defineChain, getAddress } from "viem";
 import { db } from "./db.js";
 
 // ---------- arc client (lazy) ----------
@@ -88,17 +87,35 @@ register("join-telegram",  socialSelfAttest);
 // ============================================================
 // Reads TdogeNames.nameOf(wallet); empty string = no name claimed.
 register("claim-fdoge-name", async (user, task) => {
-  const namesAddr = process.env.TDOGE_NAMES_ADDRESS as `0x${string}` | undefined;
-  if (!namesAddr) return { ok: false, reason: "names_address_unset" };
+  const raw = process.env.TDOGE_NAMES_ADDRESS;
+  if (!raw) return { ok: false, reason: "names_address_unset" };
+  // viem rejects addresses whose mixed-case doesn't match the EIP-55
+  // checksum. Normalise to avoid "address invalid" throws from a
+  // lower/upper-case env entry.
+  let namesAddr: `0x${string}`;
+  let wallet:    `0x${string}`;
   try {
-    const c = getContract({ address: namesAddr, abi: NAMES_ABI, client: client() });
-    const name = await c.read.nameOf([user.wallet as `0x${string}`]);
-    if (!name || (name as string).length === 0) {
+    namesAddr = getAddress(raw);
+    wallet    = getAddress(user.wallet);
+  } catch {
+    return { ok: false, reason: "bad_address" };
+  }
+  try {
+    const name = await client().readContract({
+      address: namesAddr,
+      abi: NAMES_ABI,
+      functionName: "nameOf",
+      args: [wallet],
+    });
+    if (!name || String(name).length === 0) {
       return { ok: false, reason: "no_name_yet", meta: { hint: "Claim your .fdoge identity at dogeforge.fun/id" } };
     }
     return { ok: true, points: task.points, proof: { name } };
   } catch (e: unknown) {
-    return { ok: false, reason: "rpc_error", meta: { msg: (e as Error)?.message } };
+    const msg = (e as { shortMessage?: string; message?: string }).shortMessage
+      ?? (e as Error)?.message ?? "";
+    console.error("[identity] rpc error:", msg);
+    return { ok: false, reason: "rpc_error", meta: { msg } };
   }
 });
 
@@ -253,34 +270,64 @@ register("daily-tweet", async (user, task, body) => {
 
 export const QUIZ_QUESTIONS = [
   {
-    q: "What is the hard cap on fDOGE supply?",
-    options: ["21,000,000", "210,000,000", "1,000,000,000", "Unlimited"],
-    correct: 1,
+    q: "What is the initial hard cap on fDOGE supply?",
+    options: ["21,000,000", "100,000,000", "210,000,000", "Unlimited"],
+    correct: 2,
   },
   {
     q: "How is gas paid on Arc?",
-    options: ["ETH", "Native ARC token", "USDC", "Free"],
+    options: ["ETH", "A native ARC token", "USDC", "Transactions are free"],
     correct: 2,
   },
   {
-    q: "Which contract holds the platform fee from each swap?",
-    options: ["Treasury EOA", "TdogePair", "LiquidityManager", "ForgeRouter"],
+    q: "What happens to the 0.10% platform fee charged on every swap?",
+    options: [
+      "It's burned",
+      "It goes to a treasury EOA",
+      "It flows to the LiquidityManager, deepening fDOGE liquidity",
+      "It's distributed to fDOGE holders pro-rata",
+    ],
     correct: 2,
   },
   {
-    q: "Mining converts what into fDOGE rewards?",
-    options: ["ETH commitments", "USDC commitments", "fDOGE itself", "NFT staking"],
+    q: "How do miners earn fDOGE?",
+    options: [
+      "By staking fDOGE tokens",
+      "By committing USDC which converts continuously into fDOGE rewards",
+      "By running a validator node on Arc",
+      "By holding an NFT that mints fDOGE each block",
+    ],
     correct: 1,
   },
   {
-    q: "What does the .fdoge identity registry require?",
+    q: "Which of these is enforced in the DOGE FORGE code?",
     options: [
-      "Pay USDC fee + at least one Miner commitment",
-      "Mint a free NFT",
-      "Hold 1,000 fDOGE",
-      "Be on a whitelist",
+      "Admin can mint unlimited fDOGE for airdrops",
+      "removeLiquidity is blocked whenever the router is paused",
+      "Only whitelisted minters (Miner and LiquidityManager) may mint fDOGE",
+      "Users need approval before every transfer",
     ],
-    correct: 0,
+    correct: 2,
+  },
+  {
+    q: "What is required to claim a .fdoge identity?",
+    options: [
+      "Hold 10,000 fDOGE in your wallet",
+      "Be early (first 1,000 wallets)",
+      "Pay a USDC fee AND have at least one position in the Miner",
+      "Mint a free NFT from the Names contract",
+    ],
+    correct: 2,
+  },
+  {
+    q: "After the 210M initial cap is reached, supply inflation is…",
+    options: [
+      "Fixed forever — no more minting is possible",
+      "Unlimited, set by whoever holds governance",
+      "Bounded by a hard ceiling (max 5%/year), admin-adjustable, pausable",
+      "Doubled every four years",
+    ],
+    correct: 2,
   },
 ];
 

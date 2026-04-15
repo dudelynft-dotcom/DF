@@ -156,7 +156,7 @@ export function TaskCard({
                   disabled:opacity-50 disabled:cursor-not-allowed
                 "
               >
-                {busy ? "…" : "Submit"}
+                {busy ? (<span className="inline-flex items-center gap-1.5"><Spinner /> Checking</span>) : "Submit"}
               </button>
             </div>
           ) : (
@@ -169,7 +169,7 @@ export function TaskCard({
                 disabled:opacity-50 disabled:cursor-not-allowed
               "
             >
-              {busy ? "…" : "Claim"}
+              {busy ? (<span className="inline-flex items-center gap-1.5"><Spinner /> Verifying</span>) : "Claim"}
             </button>
           )}
         </div>
@@ -198,7 +198,7 @@ export function TaskCard({
               disabled:opacity-50 disabled:cursor-not-allowed
             "
           >
-            {busy ? "…" : "Submit"}
+            {busy ? (<span className="inline-flex items-center gap-1.5"><Spinner /> Checking</span>) : "Submit"}
           </button>
         </div>
       )}
@@ -232,6 +232,7 @@ function friendly(reason?: string, meta?: Record<string, unknown>): string {
     case "quiz_not_live":           return "Quiz lands in step 9.";
     case "rpc_error":               return "Couldn't reach the chain. Try again in a moment.";
     case "not_authenticated":       return "Session expired. Reconnect.";
+    case "rate_limited":            return "Slow down — too many claims in a minute.";
     default:                        return reason ?? "Something went wrong.";
   }
 }
@@ -240,6 +241,15 @@ function Check() {
   return (
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
       <path d="M5 12l5 5L20 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
+function Spinner() {
+  return (
+    <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+      <path d="M21 12a9 9 0 00-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     </svg>
   );
 }

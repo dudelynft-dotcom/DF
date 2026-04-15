@@ -206,9 +206,36 @@ function Stats({ me, totalTasks, doneTasks }: { me: NonNullable<Me>; totalTasks:
             {me.points.toLocaleString()}
           </div>
           <div className="text-[11px] text-ink-faint">points</div>
+          <ReferralShortcut handle={me.xHandle} />
         </div>
       </div>
     </div>
+  );
+}
+
+function ReferralShortcut({ handle }: { handle: string }) {
+  const [copied, setCopied] = useState(false);
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://community.dogeforge.fun";
+  const link = `${origin}/?ref=${handle}`;
+  const onCopy = async () => {
+    try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    catch { /* ignore */ }
+  };
+  return (
+    <button
+      onClick={onCopy}
+      className="
+        mt-2 inline-flex items-center gap-1.5 text-[11px] text-ink-muted
+        hover:text-gold-300 transition-colors
+      "
+      title="Copy referral link"
+    >
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path d="M10 13a5 5 0 0 0 7.07 0l3.54-3.54a5 5 0 0 0-7.07-7.07L11.76 4.2M14 11a5 5 0 0 0-7.07 0L3.39 14.54a5 5 0 0 0 7.07 7.07L12.24 19.8"
+              stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+      {copied ? "Copied!" : "Copy ref link"}
+    </button>
   );
 }
 
