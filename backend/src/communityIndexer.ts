@@ -53,34 +53,57 @@ function setCursor(source: string, n: bigint) {
 }
 
 // ---- volume upserts ----
+// Do the bigint math in JS. SQLite CAST would coerce to REAL for large
+// numbers, leaving "27709524.0" literals the reader then rejects.
+
+function parseWei(s: unknown): bigint {
+  // Tolerant: accepts "123", "123.0", or missing.
+  if (s == null) return 0n;
+  const str = String(s).split(".")[0] || "0";
+  try { return BigInt(str); } catch { return 0n; }
+}
+
 function addTradeVolume(wallet: string, usdcWei: bigint) {
   if (usdcWei <= 0n) return;
   const w = wallet.toLowerCase();
   const now = Math.floor(Date.now() / 1000);
-  db.prepare(
-    `INSERT INTO community_trade_volume (wallet, usdc_in_total, swap_count, updated_at)
-     VALUES (?, ?, 1, ?)
-     ON CONFLICT(wallet) DO UPDATE SET
-       usdc_in_total = CAST((CAST(usdc_in_total AS INTEGER) + ?) AS TEXT),
-       swap_count    = swap_count + 1,
-       updated_at    = excluded.updated_at`
-  ).run(w, usdcWei.toString(), now, Number(usdcWei));
-  // Note: SQLite INTEGER caps at 2^63-1. For USDC (6 decimals) that's
-  // ~9.2 trillion units. Plenty for testnet; mainnet would need a
-  // proper bigint store but that's a separate refactor.
+  const row = db.prepare(
+    `SELECT usdc_in_total FROM community_trade_volume WHERE wallet = ?`
+  ).get(w) as { usdc_in_total?: string } | undefined;
+  if (row) {
+    const total = parseWei(row.usdc_in_total) + usdcWei;
+    db.prepare(
+      `UPDATE community_trade_volume
+         SET usdc_in_total = ?, swap_count = swap_count + 1, updated_at = ?
+       WHERE wallet = ?`
+    ).run(total.toString(), now, w);
+  } else {
+    db.prepare(
+      `INSERT INTO community_trade_volume (wallet, usdc_in_total, swap_count, updated_at)
+       VALUES (?, ?, 1, ?)`
+    ).run(w, usdcWei.toString(), now);
+  }
 }
 function addMineVolume(wallet: string, usdcWei: bigint) {
   if (usdcWei <= 0n) return;
   const w = wallet.toLowerCase();
   const now = Math.floor(Date.now() / 1000);
-  db.prepare(
-    `INSERT INTO community_mine_volume (wallet, usdc_committed_total, position_count, updated_at)
-     VALUES (?, ?, 1, ?)
-     ON CONFLICT(wallet) DO UPDATE SET
-       usdc_committed_total = CAST((CAST(usdc_committed_total AS INTEGER) + ?) AS TEXT),
-       position_count       = position_count + 1,
-       updated_at           = excluded.updated_at`
-  ).run(w, usdcWei.toString(), now, Number(usdcWei));
+  const row = db.prepare(
+    `SELECT usdc_committed_total FROM community_mine_volume WHERE wallet = ?`
+  ).get(w) as { usdc_committed_total?: string } | undefined;
+  if (row) {
+    const total = parseWei(row.usdc_committed_total) + usdcWei;
+    db.prepare(
+      `UPDATE community_mine_volume
+         SET usdc_committed_total = ?, position_count = position_count + 1, updated_at = ?
+       WHERE wallet = ?`
+    ).run(total.toString(), now, w);
+  } else {
+    db.prepare(
+      `INSERT INTO community_mine_volume (wallet, usdc_committed_total, position_count, updated_at)
+       VALUES (?, ?, 1, ?)`
+    ).run(w, usdcWei.toString(), now);
+  }
 }
 
 // ---- per-source pollers ----

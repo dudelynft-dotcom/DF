@@ -307,17 +307,22 @@ register("quiz-whitepaper", async (_user, task, body) => {
 // to USDC wei: 6 decimals). If the indexer hasn't seen the wallet
 // yet, the row is missing — treated as zero, returns "below_threshold".
 
+function parseWei(s: unknown): bigint {
+  if (s == null) return 0n;
+  const str = String(s).split(".")[0] || "0";
+  try { return BigInt(str); } catch { return 0n; }
+}
 function tradeVolumeUsdcWei(wallet: string): bigint {
   const row = db.prepare(
     `SELECT usdc_in_total FROM community_trade_volume WHERE wallet = ?`
   ).get(wallet.toLowerCase()) as { usdc_in_total: string } | undefined;
-  return row ? BigInt(row.usdc_in_total) : 0n;
+  return parseWei(row?.usdc_in_total);
 }
 function mineVolumeUsdcWei(wallet: string): bigint {
   const row = db.prepare(
     `SELECT usdc_committed_total FROM community_mine_volume WHERE wallet = ?`
   ).get(wallet.toLowerCase()) as { usdc_committed_total: string } | undefined;
-  return row ? BigInt(row.usdc_committed_total) : 0n;
+  return parseWei(row?.usdc_committed_total);
 }
 
 function tradeVerifier(user: User, task: Task): VerifyResult {
