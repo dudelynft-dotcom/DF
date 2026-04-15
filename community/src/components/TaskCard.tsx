@@ -52,14 +52,16 @@ export function TaskCard({
     ? "done"
     : "open";
 
-  const onClaim = async () => {
+  const [tweetUrl, setTweetUrl] = useState("");
+
+  const submit = async (extra?: Record<string, unknown>) => {
     setErr(null);
     setBusy(true);
     try {
       const res = await fetch("/api/community/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug: task.slug }),
+        body: JSON.stringify({ slug: task.slug, extra }),
       });
       const j = await res.json();
       if (!j?.ok) {
@@ -72,6 +74,11 @@ export function TaskCard({
     } finally {
       setBusy(false);
     }
+  };
+  const onClaim = () => submit();
+  const onSubmitTweet = () => {
+    if (!tweetUrl.trim()) { setErr("Paste your tweet URL first."); return; }
+    submit({ tweetUrl: tweetUrl.trim() });
   };
 
   return (
@@ -111,14 +118,36 @@ export function TaskCard({
         </div>
 
         <div className="shrink-0">
-          {status === "done" ? (
+          {status === "done" || status === "today" ? (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-xs">
-              <Check /> Claimed
+              <Check /> {status === "today" ? "Today" : "Claimed"}
             </span>
-          ) : status === "today" ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-xs">
-              <Check /> Today
-            </span>
+          ) : task.slug === "daily-tweet" ? (
+            // Tweet URL form — wider so it gets its own row on mobile.
+            <div className="hidden sm:flex items-center gap-2">
+              <input
+                type="url"
+                value={tweetUrl}
+                onChange={(e) => setTweetUrl(e.target.value)}
+                placeholder="https://x.com/you/status/…"
+                className="
+                  w-64 px-3 py-2 rounded-md text-xs bg-bg-base
+                  border border-line text-ink placeholder:text-ink-faint
+                  focus:outline-none focus:border-gold-400/60
+                "
+              />
+              <button
+                onClick={onSubmitTweet}
+                disabled={busy || disabled}
+                className="
+                  px-3 py-2 rounded-md text-sm font-medium transition-colors
+                  bg-gold-400 text-bg-base hover:bg-gold-300
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                "
+              >
+                {busy ? "…" : "Submit"}
+              </button>
+            </div>
           ) : (
             <button
               onClick={onClaim}
@@ -134,6 +163,34 @@ export function TaskCard({
           )}
         </div>
       </div>
+
+      {/* Mobile-only tweet form, full-width row under the description. */}
+      {task.slug === "daily-tweet" && status === "open" && (
+        <div className="sm:hidden mt-3 flex gap-2">
+          <input
+            type="url"
+            value={tweetUrl}
+            onChange={(e) => setTweetUrl(e.target.value)}
+            placeholder="Paste tweet URL"
+            className="
+              flex-1 min-w-0 px-3 py-2 rounded-md text-xs bg-bg-base
+              border border-line text-ink placeholder:text-ink-faint
+              focus:outline-none focus:border-gold-400/60
+            "
+          />
+          <button
+            onClick={onSubmitTweet}
+            disabled={busy || disabled}
+            className="
+              px-3 py-2 rounded-md text-sm font-medium transition-colors
+              bg-gold-400 text-bg-base hover:bg-gold-300
+              disabled:opacity-50 disabled:cursor-not-allowed
+            "
+          >
+            {busy ? "…" : "Submit"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -146,7 +203,19 @@ function friendly(reason?: string, meta?: Record<string, unknown>): string {
     case "no_name_yet":             return (meta?.hint as string) ?? "Claim your .fdoge identity first.";
     case "names_address_unset":     return "Identity contract not configured. Backend env missing.";
     case "indexer_not_live":        return "On-chain verification ships in step 5.";
+    case "below_threshold":         return `Need $${meta?.thresholdUsd} total — you have $${meta?.progressUsd}. Indexer updates ~12s.`;
     case "tweet_verification_not_live": return "Tweet check ships in step 6.";
+    case "missing_tweet_url":       return "Paste your tweet URL.";
+    case "bad_tweet_url":           return "That doesn't look like a tweet URL.";
+    case "tweet_already_claimed":   return "That tweet was already used.";
+    case "x_bearer_unset":          return "Backend X bearer token not configured.";
+    case "x_api_error":             return "X API rejected the lookup.";
+    case "x_api_unreachable":       return "Couldn't reach X. Try again.";
+    case "tweet_not_found":         return "Tweet not found or private.";
+    case "wrong_author":            return "That tweet isn't from your linked X account.";
+    case "tweet_too_old":           return "Tweet must be from the last 24 hours.";
+    case "tweet_in_future":         return "Clock skew detected. Try again.";
+    case "missing_tokens":          return `Missing required tokens: ${(meta?.missing as string[] ?? []).join(", ")}`;
     case "quiz_not_live":           return "Quiz lands in step 9.";
     case "rpc_error":               return "Couldn't reach the chain. Try again in a moment.";
     case "not_authenticated":       return "Session expired. Reconnect.";
