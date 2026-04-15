@@ -107,7 +107,20 @@ export default function TradePage() {
   const displayedVerified   = sortedVerified.filter(matches);
   const displayedUnverified = unverifiedAll.filter(matches);
 
-  const [view, setView] = useState<"pro" | "list" | "grid">("pro");
+  // List is the default — it's the densest overview on any screen and loads
+  // without picking a pair. Pro is an opt-in detail mode. Persist choice so
+  // returning visitors don't get reset.
+  const [view, setView] = useState<"pro" | "list" | "grid">("list");
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("trade.view");
+      if (saved === "pro" || saved === "list" || saved === "grid") setView(saved);
+    } catch { /* private-mode browsers throw on localStorage */ }
+  }, []);
+  useEffect(() => {
+    try { window.localStorage.setItem("trade.view", view); } catch {}
+  }, [view]);
+
   const [selectedAddr, setSelectedAddr] = useState<`0x${string}` | null>(null);
 
   // Default selection: first verified token (fDOGE) once loaded.
@@ -248,43 +261,15 @@ export default function TradePage() {
         />
       )}
 
-      {/* Unverified section — hidden in Pro view (it's inside the left pane) */}
-      {view !== "pro" && (
-        <section>
-          <div className="flex items-baseline justify-between mb-4">
-            <h2 className="font-display text-2xl tracking-tight flex items-center gap-2">
-              Unverified
-              <span className="text-[11px] uppercase tracking-[0.22em] text-ink-muted bg-white/5 border border-line rounded-full px-2 py-0.5">
-                {displayedUnverified.length}
-              </span>
-            </h2>
-            <span className="text-xs text-ink-faint">Auto-discovered. Verify before trading.</span>
-          </div>
-          {displayedUnverified.length === 0 ? (
-            <div className="rounded-xl border border-line bg-bg-surface p-8 text-center text-ink-muted text-sm">
-              {q
-                ? <>No unverified tokens match &ldquo;{query}&rdquo;.</>
-                : <>No unverified tokens discovered yet. The indexer scans new contract deployments on Arc as it runs.</>}
-            </div>
-          ) : view === "grid" ? (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {displayedUnverified.map((t) => (
-                <UnverifiedCard
-                  key={t.address}
-                  token={t}
-                  onTrade={() => openTrade({ address: t.address, symbol: t.symbol, name: t.name, decimals: t.decimals })}
-                />
-              ))}
-            </div>
-          ) : (
-            <TokenTable
-              rows={displayedUnverified}
-              metricsByAddr={metricsByAddr}
-              onTrade={(t) => openTrade(t)}
-              unverified
-            />
-          )}
-        </section>
+      {/* Auto-discovered tokens are deliberately NOT shown on the public
+          Trade page anymore — the raw firehose is noisy and most of it is
+          scams. The admin console at /DFAdmin is the triage surface.
+          The indexer still tracks them; /DFAdmin can promote any to
+          verified, and once verified they appear here. */}
+      {displayedUnverified.length > 0 && (
+        <div className="text-[11px] text-ink-faint text-center">
+          {displayedUnverified.length} auto-discovered token{displayedUnverified.length === 1 ? "" : "s"} pending admin review.
+        </div>
       )}
 
       <TradeModal open={!!tradeToken} onClose={() => setTradeToken(null)} token={tradeToken} />
@@ -415,20 +400,19 @@ function TokenCard({
 /// selected-token detail + metrics + swap trigger on the right. Mobile stacks
 /// the panes vertically.
 function ProView({
-  verified, unverified, metricsByAddr, selected, onSelect,
+  verified, metricsByAddr, selected, onSelect,
 }: {
   verified: TileToken[];
-  unverified: TileToken[];
+  unverified: TileToken[]; // kept in signature for back-compat, ignored
   metricsByAddr: Record<string, TokenMetrics | undefined>;
   selected: TileToken | null;
   onSelect: (t: TileToken) => void;
 }) {
   return (
     <div className="grid lg:grid-cols-[280px_1fr] gap-4 min-h-[600px]">
-      {/* Left: market list */}
+      {/* Left: market list (verified only — unverified noise lives in /DFAdmin) */}
       <aside className="rounded-xl border border-line bg-bg-surface overflow-hidden flex flex-col">
         <MarketListGroup title="Verified" tokens={verified} metricsByAddr={metricsByAddr} selected={selected} onSelect={onSelect} showTick />
-        <MarketListGroup title="Unverified" tokens={unverified} metricsByAddr={metricsByAddr} selected={selected} onSelect={onSelect} subdued />
       </aside>
 
       {/* Right: detail + swap trigger */}

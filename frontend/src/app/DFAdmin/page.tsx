@@ -228,71 +228,155 @@ export default function AdminPage() {
       </section>
 
       {/* ─── Backend: Tokens ─── */}
-      <section className="mb-12 rounded-2xl border border-line bg-bg-surface p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="font-display text-xl">Tokens</h2>
-            <p className="text-ink-faint text-xs">
-              {BACKEND ? `${tokens.length} in index` : "NEXT_PUBLIC_BACKEND_URL not set"}
-            </p>
-          </div>
-          <AdminButton onClick={loadTokens} disabled={tokensLoading}>
-            {tokensLoading ? "…" : "refresh"}
-          </AdminButton>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-ink-faint text-[11px] uppercase tracking-[0.18em]">
-                <th className="text-left py-2">Symbol</th>
-                <th className="text-left py-2">Address</th>
-                <th className="text-left py-2">Verified</th>
-                <th className="text-right py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tokens.map((t) => (
-                <tr key={t.address} className="border-t border-line">
-                  <td className="py-2 pr-4 text-ink">{t.symbol}</td>
-                  <td className="py-2 pr-4 tabular text-ink-muted">
-                    {t.address.slice(0, 8)}…{t.address.slice(-6)}
-                  </td>
-                  <td className="py-2 pr-4">
-                    {t.verified ? (
-                      <span className="text-green-300">yes</span>
-                    ) : (
-                      <span className="text-ink-faint">no</span>
-                    )}
-                  </td>
-                  <td className="py-2 text-right space-x-2">
-                    <button
-                      onClick={() => toggleVerify(t.address, !t.verified)}
-                      className="px-2 py-1 text-xs rounded border border-line hover:border-gold-400/60 hover:text-gold-200"
-                    >
-                      {t.verified ? "unverify" : "verify"}
-                    </button>
-                    <button
-                      onClick={() => toggleHide(t.address, true)}
-                      className="px-2 py-1 text-xs rounded border border-red-500/30 text-red-300 hover:bg-red-500/10"
-                    >
-                      hide
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!tokensLoading && tokens.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-6 text-center text-ink-faint text-sm">
-                    No tokens yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <TokenTriage
+        tokens={tokens}
+        loading={tokensLoading}
+        onRefresh={loadTokens}
+        onVerify={toggleVerify}
+        onHide={toggleHide}
+      />
     </div>
+  );
+}
+
+/// Triage panel — filter tabs, search by symbol/name/address, action buttons.
+function TokenTriage({
+  tokens, loading, onRefresh, onVerify, onHide,
+}: {
+  tokens: TokenRow[];
+  loading: boolean;
+  onRefresh: () => void;
+  onVerify: (addr: string, next: boolean) => void;
+  onHide:   (addr: string, next: boolean) => void;
+}) {
+  const [filter, setFilter] = useState<"unverified" | "verified" | "all">("unverified");
+  const [query, setQuery]   = useState("");
+  const q = query.trim().toLowerCase();
+
+  const displayed = useMemo(() => {
+    const byFilter = tokens.filter((t) =>
+      filter === "all" ? true
+      : filter === "verified" ? t.verified
+      : !t.verified,
+    );
+    if (!q) return byFilter;
+    return byFilter.filter((t) =>
+      t.symbol.toLowerCase().includes(q)
+      || t.name.toLowerCase().includes(q)
+      || t.address.toLowerCase().includes(q),
+    );
+  }, [tokens, filter, q]);
+
+  const unverifiedCount = tokens.filter((t) => !t.verified).length;
+  const verifiedCount   = tokens.filter((t) =>  t.verified).length;
+
+  return (
+    <section className="mb-12 rounded-2xl border border-line bg-bg-surface p-6">
+      <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+        <div>
+          <h2 className="font-display text-xl">Tokens</h2>
+          <p className="text-ink-faint text-xs">
+            {tokens.length} total · {unverifiedCount} unverified · {verifiedCount} verified
+          </p>
+        </div>
+        <AdminButton onClick={onRefresh} disabled={loading}>
+          {loading ? "…" : "refresh"}
+        </AdminButton>
+      </div>
+
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <div className="flex gap-1 p-1 rounded-lg border border-line bg-bg-base">
+          {([
+            { k: "unverified", label: `Unverified (${unverifiedCount})` },
+            { k: "verified",   label: `Verified (${verifiedCount})` },
+            { k: "all",        label: "All" },
+          ] as const).map(({ k, label }) => (
+            <button
+              key={k}
+              onClick={() => setFilter(k)}
+              className={`px-3 py-1 rounded-md text-xs transition-colors ${
+                filter === k ? "bg-gold-400 text-bg-base font-medium" : "text-ink-muted hover:text-ink"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="relative flex-1 min-w-[220px]">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by symbol, name, or contract address"
+            className="w-full pl-9 pr-3 py-2 rounded-md bg-bg-base border border-line text-sm tabular text-ink placeholder:text-ink-faint focus:border-gold-400/60 focus:outline-none transition-colors"
+          />
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-faint pointer-events-none"
+               viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" strokeLinecap="round" />
+          </svg>
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full text-ink-faint hover:text-ink hover:bg-white/5 flex items-center justify-center"
+              aria-label="Clear"
+            >×</button>
+          )}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-ink-faint text-[11px] uppercase tracking-[0.18em]">
+              <th className="text-left py-2">Symbol</th>
+              <th className="text-left py-2">Name</th>
+              <th className="text-left py-2">Address</th>
+              <th className="text-left py-2">Verified</th>
+              <th className="text-right py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayed.map((t) => (
+              <tr key={t.address} className="border-t border-line">
+                <td className="py-2 pr-4 text-ink">{t.symbol}</td>
+                <td className="py-2 pr-4 text-ink-muted truncate max-w-[180px]">{t.name}</td>
+                <td className="py-2 pr-4 tabular text-ink-muted">
+                  {t.address.slice(0, 8)}…{t.address.slice(-6)}
+                </td>
+                <td className="py-2 pr-4">
+                  {t.verified ? (
+                    <span className="text-green-300">yes</span>
+                  ) : (
+                    <span className="text-ink-faint">no</span>
+                  )}
+                </td>
+                <td className="py-2 text-right space-x-2 whitespace-nowrap">
+                  <button
+                    onClick={() => onVerify(t.address, !t.verified)}
+                    className="px-2 py-1 text-xs rounded border border-line hover:border-gold-400/60 hover:text-gold-200"
+                  >
+                    {t.verified ? "unverify" : "verify"}
+                  </button>
+                  <button
+                    onClick={() => onHide(t.address, true)}
+                    className="px-2 py-1 text-xs rounded border border-red-500/30 text-red-300 hover:bg-red-500/10"
+                  >
+                    hide
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {!loading && displayed.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-ink-faint text-sm">
+                  {q ? `No tokens match "${query}".` : "No tokens in this bucket yet."}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
