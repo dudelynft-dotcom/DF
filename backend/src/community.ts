@@ -12,6 +12,7 @@
 import { Router, type Request, type Response } from "express";
 import crypto from "node:crypto";
 import { db } from "./db.js";
+import { getMineVolumeUsd, getTradeVolumeUsd, isKnownTask, runVerifier } from "./communityVerifiers.js";
 
 export const community = Router();
 
@@ -146,6 +147,10 @@ community.get("/me", (req, res) => {
     completions: Object.fromEntries(completions.map((c) => [c.task_id, { n: c.n, lastAt: c.last_at }])),
     referrals: refCount.n,
     createdAt: user.created_at,
+    volume: {
+      tradeUsd: getTradeVolumeUsd(user.wallet),
+      mineUsd:  getMineVolumeUsd(user.wallet),
+    },
   });
 });
 
@@ -244,6 +249,87 @@ community.get("/leaderboard", (req, res) => {
         points: r.pts,
       })),
   });
+});
+
+// ------------------------------------------------------------------
+// POST /community/claim
+// Body: { xId, wallet, slug, ...verifier-specific fields }
+// HMAC over xId|wallet, same as bind-wallet.
+//
+// Pipeline:
+//   1. verify caller HMAC
+//   2. resolve user + task
+//   3. enforce max_completions
+//   4. dispatch verifier (verifiers/*.ts)
+//   5. on success: insert completion + ledger atomically; return new total
+// ------------------------------------------------------------------
+community.post("/claim", async (req, res) => {
+  if (!verifyCaller(req, res)) return;
+  const { xId, wallet, slug } = req.body as { xId: string; wallet: string; slug: string };
+  if (!slug) return res.status(400).json({ error: "missing_slug" });
+  if (!isKnownTask(slug)) return res.status(404).json({ error: "unknown_slug" });
+
+  const user = db.prepare(
+    `SELECT id, x_id, x_handle, wallet FROM community_users WHERE x_id = ? AND wallet = ?`
+  ).get(xId, wallet.toLowerCase()) as
+    { id: number; x_id: string; x_handle: string; wallet: string } | undefined;
+  if (!user) return res.status(404).json({ error: "user_not_bound" });
+
+  const task = db.prepare(
+    `SELECT id, slug, kind, points, max_completions, payload
+     FROM community_task_defs WHERE slug = ? AND active = 1`
+  ).get(slug) as
+    { id: number; slug: string; kind: string; points: number; max_completions: number; payload: string } | undefined;
+  if (!task) return res.status(404).json({ error: "task_not_found" });
+
+  // max_completions = -1 means unlimited (e.g. daily-checkin).
+  if (task.max_completions !== -1) {
+    const existing = db.prepare(
+      `SELECT COUNT(*) AS n FROM community_completions WHERE user_id = ? AND task_id = ?`
+    ).get(user.id, task.id) as { n: number };
+    if (existing.n >= task.max_completions) {
+      return res.status(409).json({ error: "max_completions_reached" });
+    }
+  }
+
+  const result = await runVerifier(slug, user, task, req.body ?? {});
+  if (!result.ok) return res.status(400).json({ error: result.reason, meta: result.meta });
+
+  // Atomic award: completion + ledger in one tx so totals never drift.
+  const now = Math.floor(Date.now() / 1000);
+  const proof = JSON.stringify(result.proof ?? {});
+  const tx = db.transaction((payload: { points: number; proof: string }) => {
+    const completion = db.prepare(
+      `INSERT INTO community_completions (user_id, task_id, completed_at, proof, points_awarded)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(user.id, task.id, now, payload.proof, payload.points);
+    db.prepare(
+      `INSERT INTO community_points_ledger (user_id, delta, reason, ref_id, created_at)
+       VALUES (?, ?, 'task', ?, ?)`
+    ).run(user.id, payload.points, completion.lastInsertRowid, now);
+    return completion.lastInsertRowid;
+  });
+  tx({ points: result.points, proof });
+
+  // Referral 10%: if this user has a referrer, credit them.
+  const ref = db.prepare(
+    `SELECT referrer_id FROM community_users WHERE id = ?`
+  ).get(user.id) as { referrer_id: number | null };
+  if (ref?.referrer_id) {
+    const refPts = Math.floor(result.points * 0.10);
+    if (refPts > 0) {
+      db.prepare(
+        `INSERT INTO community_points_ledger (user_id, delta, reason, ref_id, created_at)
+         VALUES (?, ?, 'referral', ?, ?)`
+      ).run(ref.referrer_id, refPts, user.id, now);
+    }
+  }
+
+  const total = db.prepare(
+    `SELECT COALESCE(SUM(delta), 0) AS total FROM community_points_ledger WHERE user_id = ?`
+  ).get(user.id) as { total: number };
+
+  res.json({ ok: true, awarded: result.points, total: total.total, proof: result.proof ?? {} });
 });
 
 function safeJson(s: string): unknown {

@@ -133,6 +133,30 @@ CREATE TABLE IF NOT EXISTS community_referrals (
   PRIMARY KEY (referrer_id, referee_id)
 );
 CREATE INDEX IF NOT EXISTS idx_referrals_referee ON community_referrals(referee_id);
+
+-- Per-wallet running totals derived from on-chain events. Updated by
+-- communityIndexer.ts as it walks ForgeRouter.Swap and Miner.Committed.
+-- USDC values stored as bigint strings (6-decimal wei). One row per
+-- wallet for fast threshold checks.
+CREATE TABLE IF NOT EXISTS community_trade_volume (
+  wallet         TEXT PRIMARY KEY,        -- lowercased 0x address
+  usdc_in_total  TEXT NOT NULL DEFAULT '0',
+  swap_count     INTEGER NOT NULL DEFAULT 0,
+  updated_at     INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS community_mine_volume (
+  wallet               TEXT PRIMARY KEY,
+  usdc_committed_total TEXT NOT NULL DEFAULT '0',
+  position_count       INTEGER NOT NULL DEFAULT 0,
+  updated_at           INTEGER NOT NULL
+);
+
+-- Event cursors per (source, address). Independent from the existing
+-- indexer_cursor so the community indexer can run alongside.
+CREATE TABLE IF NOT EXISTS community_event_cursor (
+  source     TEXT PRIMARY KEY,        -- 'forge_router_swap' | 'miner_committed'
+  last_block INTEGER NOT NULL
+);
 `);
 
 // ------------------------------------------------------------------

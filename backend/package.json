@@ -8,6 +8,7 @@
     "start": "tsx src/server.ts",
     "indexer": "tsx src/indexer.ts",
     "price-indexer": "tsx src/priceIndexer.ts",
+    "community-indexer": "tsx src/communityIndexer.ts",
     "keeper": "tsx src/keeper.ts",
     "typecheck": "tsc --noEmit"
   },

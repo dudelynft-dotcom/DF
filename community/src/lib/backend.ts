@@ -104,6 +104,28 @@ export type LeaderboardEntry = {
   points: number;
 };
 
+export type ClaimResult =
+  | { ok: true;  awarded: number; total: number; proof: Record<string, unknown> }
+  | { ok: false; reason: string;  meta?: Record<string, unknown> };
+
+export async function claimTask(input: {
+  xId: string; wallet: `0x${string}`; slug: string;
+  extra?: Record<string, unknown>;
+}): Promise<ClaimResult> {
+  const body = { xId: input.xId, wallet: input.wallet, slug: input.slug, ...(input.extra ?? {}) };
+  const res = await fetch(`${backendUrl()}/community/claim`, {
+    method: "POST",
+    headers: {
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${hmac(input.xId, input.wallet)}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, reason: j?.error ?? `backend_${res.status}`, meta: j?.meta };
+  return j as ClaimResult;
+}
+
 export async function fetchLeaderboard(range: "24h" | "7d" | "all" = "all", limit = 100): Promise<LeaderboardEntry[]> {
   const u = new URL(`${backendUrl()}/community/leaderboard`);
   u.searchParams.set("range", range);
