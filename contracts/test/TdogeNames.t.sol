@@ -53,7 +53,7 @@ contract TdogeNamesTest is Test {
         names.claim("alice");
 
         assertEq(names.nameOf(alice), "alice");
-        assertEq(names.displayNameOf(alice), "alice.tdoge");
+        assertEq(names.displayNameOf(alice), "alice.fdoge");
         assertEq(names.resolveName("alice"), alice);
         assertEq(names.totalClaimed(), 1);
         assertEq(names.remaining(), 4999);

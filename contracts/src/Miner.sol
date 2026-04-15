@@ -574,7 +574,10 @@ contract Miner is Ownable, ReentrancyGuard, Pausable {
         lastAutoFlushAt = uint64(block.timestamp);
         emit Flushed(sentLq, sentTz);
 
-        if (sentLq > 0 && lm != address(0)) {
+        // Only seed if lm is a contract — guards against misconfiguration
+        // where liquidityManager was set to an EOA (the try/catch below
+        // would still be tripped by Solidity's no-code check).
+        if (sentLq > 0 && lm != address(0) && lm.code.length > 0) {
             try ILiquidityManagerSeed(lm).seedLiquidity() returns (uint256) {
                 // success — pool grew
             } catch (bytes memory reason) {
