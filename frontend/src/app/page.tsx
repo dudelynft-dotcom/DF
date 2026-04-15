@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { LiveStats } from "@/components/LiveStats";
+import { HomeHeroTicker } from "@/components/HomeHeroTicker";
 
 export default function Home() {
   return (
     <div className="space-y-24">
+      {/* ───────── Hero ───────── */}
       <section className="pt-10 pb-4">
         <p className="text-xs uppercase tracking-[0.28em] text-gold-400/80 mb-6">
           Arc Network · Mining Protocol
@@ -13,8 +15,9 @@ export default function Home() {
           <br /> Built on Arc.
         </h1>
         <p className="mt-6 sm:mt-8 max-w-xl text-ink-muted text-base sm:text-lg leading-relaxed">
-          Commit USDC and earn fDOGE continuously. The emission curve follows
-          a four-phase schedule with a hard cap of 210,000,000 fDOGE.
+          Commit USDC and earn fDOGE continuously. Emission follows a four-phase curve
+          with a hard cap of 210,000,000 fDOGE. Every mining cycle deepens liquidity
+          automatically — no LP deposit required.
         </p>
         <div className="mt-8 sm:mt-10 flex flex-wrap gap-3">
           <Link
@@ -27,15 +30,52 @@ export default function Home() {
             href="/trade"
             className="px-5 sm:px-6 py-3 rounded-md border border-line text-ink hover:border-gold-400/60 transition-colors"
           >
-            Explore tokens
+            Explore markets
           </Link>
+          <Link
+            href="/TDOGEPAPER"
+            className="px-5 sm:px-6 py-3 rounded-md text-ink-muted hover:text-ink transition-colors"
+          >
+            Read the paper →
+          </Link>
+        </div>
+
+        {/* Live ticker — renders client-side from pair reserves. */}
+        <div className="mt-10 sm:mt-12">
+          <HomeHeroTicker />
         </div>
       </section>
 
       <div className="hairline" />
 
+      {/* ───────── Live protocol stats ───────── */}
       <LiveStats />
 
+      {/* ───────── How it works ───────── */}
+      <section>
+        <p className="text-xs uppercase tracking-[0.28em] text-gold-400/80 mb-6">
+          How it works
+        </p>
+        <div className="grid md:grid-cols-3 gap-px bg-line rounded-xl overflow-hidden">
+          <Step
+            num="01"
+            title="Commit USDC"
+            body="Open a mining position with any amount of USDC. Pick a Harvest Mode — Instant (1.00×), Monthly (1.20×), or Long-Term (1.50×) — each position is independent."
+          />
+          <Step
+            num="02"
+            title="Earn fDOGE"
+            body="Each position converts at 2% / day of its commitment. The protocol mints fDOGE to you based on the active phase rate × your multipliers. Unlock and harvest anytime after the lock."
+          />
+          <Step
+            num="03"
+            title="Liquidity deepens"
+            body="95% of every committed USDC routes into the fDOGE/USDC pool, auto-flushed from inside the Miner contract. No keeper, no timing game. The pool owns itself."
+          />
+        </div>
+      </section>
+
+      {/* ───────── Primary features ───────── */}
       <section className="grid md:grid-cols-3 gap-px bg-line rounded-xl overflow-hidden">
         <Feature
           eyebrow="Mine"
@@ -45,18 +85,19 @@ export default function Home() {
         />
         <Feature
           eyebrow="Trade"
-          title="Unified token directory"
-          body="Curated assets alongside tokens discovered automatically on Arc. Verified and unverified sections, with direct on-chain address access."
+          title="Own the liquidity layer"
+          body="DOGE FORGE runs its own factory + router. Every pair on the DEX is deployed and seeded by the protocol — no external aggregator, no hidden spread."
           href="/trade"
         />
         <Feature
-          eyebrow="Portfolio"
-          title="Balances and positions"
-          body="Live view of your wallet balances, active mining positions, projected rewards, and cumulative miner score."
-          href="/portfolio"
+          eyebrow="Identity"
+          title=".fdoge on-chain names"
+          body="Claim a permanent .fdoge name once you've mined. Claim fee flows 100% into liquidity — identity is both a status signal and a deflationary act."
+          href="/id"
         />
       </section>
 
+      {/* ───────── Emission curve ───────── */}
       <section>
         <p className="text-xs uppercase tracking-[0.28em] text-gold-400/80 mb-6">
           Emission Curve
@@ -67,6 +108,33 @@ export default function Home() {
           <Phase label="Phase 2"   range="70M to 150M"  rate="40 fDOGE / USDC"  note="stabilisation" />
           <Phase label="Phase 3"   range="150M to 210M" rate="10 fDOGE / USDC"  note="scarcity" />
           <Phase label="Post-cap"  range="210M +"       rate="0.2 fDOGE / USDC" tone="dim" note="10M / yr inflation" />
+        </div>
+      </section>
+
+      {/* ───────── Closing CTA ───────── */}
+      <section className="rounded-2xl border border-gold-400/30 bg-gradient-to-br from-gold-400/10 via-bg-surface to-bg-surface p-8 sm:p-12 text-center">
+        <p className="text-[11px] uppercase tracking-[0.28em] text-gold-400/90">Ready to mine</p>
+        <h2 className="mt-3 font-display text-3xl sm:text-4xl tracking-tight text-ink">
+          Your first position is a single click away.
+        </h2>
+        <p className="mt-3 max-w-xl mx-auto text-ink-muted text-sm">
+          Free Arc Testnet USDC available from the Circle faucet. No audit yet — test with
+          amounts you don&rsquo;t mind leaving on chain while the protocol hardens.
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <Link
+            href="/mine"
+            className="px-6 py-3 rounded-md bg-gold-400 text-bg-base font-semibold hover:bg-gold-300 transition-colors"
+          >
+            Open a position
+          </Link>
+          <a
+            href="https://faucet.circle.com"
+            target="_blank" rel="noreferrer"
+            className="px-6 py-3 rounded-md border border-line text-ink hover:border-gold-400/60 transition-colors"
+          >
+            Faucet ↗
+          </a>
         </div>
       </section>
     </div>
@@ -88,6 +156,16 @@ function Feature({
         Open →
       </span>
     </Link>
+  );
+}
+
+function Step({ num, title, body }: { num: string; title: string; body: string }) {
+  return (
+    <div className="p-8 bg-bg-surface flex flex-col gap-3">
+      <span className="font-display text-3xl text-gold-300 tabular">{num}</span>
+      <h3 className="font-display text-xl tracking-tight text-ink">{title}</h3>
+      <p className="text-sm text-ink-muted leading-relaxed">{body}</p>
+    </div>
   );
 }
 
