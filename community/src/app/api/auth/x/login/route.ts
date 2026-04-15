@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { buildAuthzUrl, makePkce } from "@/lib/twitter";
 
+// Force dynamic rendering — Vercel otherwise static-optimises this
+// route and serves a cached PKCE verifier to every caller, making
+// the callback's state check fail with `bad_state`.
+export const dynamic = "force-dynamic";
+
 // Start the X OAuth 2.0 flow.
 //   1. Mint PKCE verifier + challenge + state
 //   2. Stash verifier+state in short-lived cookies
