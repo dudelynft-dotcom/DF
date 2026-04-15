@@ -200,8 +200,6 @@ export default function TradePage() {
         <div className="flex items-center gap-4">
           <div className="text-xs text-ink-faint">
             Verified: <span className="text-ink tabular">{displayedVerified.length}</span>
-            {" · "}
-            Unverified: <span className="text-ink tabular">{displayedUnverified.length}</span>
             {q && (
               <span className="ml-2 text-gold-300">· filtered by &ldquo;{query}&rdquo;</span>
             )}
@@ -266,11 +264,8 @@ export default function TradePage() {
           scams. The admin console at /DFAdmin is the triage surface.
           The indexer still tracks them; /DFAdmin can promote any to
           verified, and once verified they appear here. */}
-      {displayedUnverified.length > 0 && (
-        <div className="text-[11px] text-ink-faint text-center">
-          {displayedUnverified.length} auto-discovered token{displayedUnverified.length === 1 ? "" : "s"} pending admin review.
-        </div>
-      )}
+      {/* Unverified firehose is intentionally hidden on the public Trade
+          page. Everything shows up in /DFAdmin instead. */}
 
       <TradeModal open={!!tradeToken} onClose={() => setTradeToken(null)} token={tradeToken} />
     </div>
@@ -343,8 +338,8 @@ function TokenCard({
               <span className="font-display text-lg text-ink truncate">{token.symbol}</span>
               <VerifiedTick />
               {token.kind === "project" && (
-                <span className="text-[10px] uppercase tracking-wider text-gold-300 bg-gold-400/10 border border-gold-400/30 rounded-full px-1.5 py-0.5">
-                  Project
+                <span className="text-[10px] uppercase tracking-wider text-gold-300 bg-gold-400/10 border border-gold-400/30 rounded-full px-2 py-0.5 whitespace-nowrap">
+                  To the moon 🚀
                 </span>
               )}
             </div>
@@ -513,8 +508,8 @@ function ProDetail({
             <h2 className="font-display text-3xl tracking-tight text-ink">{token.symbol}</h2>
             {token.verified && <VerifiedTick />}
             {token.kind === "project" && (
-              <span className="text-[10px] uppercase tracking-wider text-gold-300 bg-gold-400/10 border border-gold-400/30 rounded-full px-1.5 py-0.5">
-                Project
+              <span className="text-[10px] uppercase tracking-wider text-gold-300 bg-gold-400/10 border border-gold-400/30 rounded-full px-2 py-0.5 whitespace-nowrap">
+                To the moon 🚀
               </span>
             )}
           </div>
@@ -663,8 +658,8 @@ function TokenTable({
                   <span className="font-medium text-ink truncate">{t.symbol}</span>
                   {!unverified && <VerifiedTick />}
                   {t.kind === "project" && (
-                    <span className="text-[9px] uppercase tracking-wider text-gold-300 bg-gold-400/10 border border-gold-400/30 rounded-full px-1.5 py-0.5 shrink-0">
-                      Project
+                    <span className="text-[9px] uppercase tracking-wider text-gold-300 bg-gold-400/10 border border-gold-400/30 rounded-full px-2 py-0.5 shrink-0 whitespace-nowrap">
+                      To the moon 🚀
                     </span>
                   )}
                   {unverified && (
