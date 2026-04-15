@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { BindWallet } from "@/components/BindWallet";
 
@@ -17,7 +17,18 @@ type Me = {
 //   2. Bind wallet — gated on session from /api/auth/me
 //
 // All state lives server-side; this page just reads /api/auth/me.
+// Next.js App Router requires components that call useSearchParams()
+// to sit under a Suspense boundary during static generation — wrap
+// the body in one so the prerender succeeds on Vercel.
 export default function Connect() {
+  return (
+    <Suspense fallback={null}>
+      <ConnectBody />
+    </Suspense>
+  );
+}
+
+function ConnectBody() {
   const [me, setMe] = useState<Me | undefined>(undefined);
   const search = useSearchParams();
   const err = search.get("err");
