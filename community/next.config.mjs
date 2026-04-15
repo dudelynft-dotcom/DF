@@ -5,12 +5,14 @@
 // restrict where a compromised dep could exfiltrate to.
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  // telegram.org hosts the Login Widget bootstrap script; oauth.telegram.org
+  // is the iframe it opens to collect the user's consent.
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
   "connect-src 'self' https: wss:",
-  "frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org",
+  "frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org https://oauth.telegram.org",
   "worker-src 'self' blob:",
   "base-uri 'self'",
   "form-action 'self' https://twitter.com https://x.com",
