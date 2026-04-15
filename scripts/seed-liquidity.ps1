@@ -36,9 +36,13 @@ Write-Host "Seed   : $env:SEED_USDC_AMOUNT USDC per side"
 
 Push-Location $contracts
 try {
+  # --skip-simulation: Arc's USDC calls the blocklist precompile
+  # (0x1800…0001) on every transfer, which Foundry's local sim can't handle.
+  # The actual chain has the precompile, so we broadcast directly.
   & $forge script "script/SeedLiquidity.s.sol:SeedLiquidity" `
     --rpc-url $RPC `
     --broadcast `
+    --skip-simulation `
     --gas-estimate-multiplier 200
 }
 finally {
