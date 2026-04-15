@@ -6,12 +6,11 @@ import { formatUnits, parseUnits } from "viem";
 import { addresses, tempo } from "@/config/chain";
 import { CURATED_TOKENS } from "@/config/tokens";
 import { erc20Abi } from "@/lib/abis";
-import { routerAbi, unitflowFactoryAbi, unitflowRouterAbi, aggregatorAbi } from "@/lib/dexAbis";
+import { forgeFactoryAbi, forgeRouterAbi } from "@/lib/dexAbis";
 import { sendTx, prettifyError } from "@/lib/tx";
 import { useToast } from "./Toaster";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
-const HAS_AGGREGATOR = addresses.aggregator && addresses.aggregator.toLowerCase() !== ZERO;
 
 export type SwapToken = {
   address: `0x${string}`;
@@ -20,30 +19,17 @@ export type SwapToken = {
   decimals: number;
 };
 
-type Route = "tdoge-amm" | "unitflow" | "none";
-
-/// fDOGE always routes through our own AMM; any other non-USDC token goes
-/// through UnitFlow (via our aggregator if deployed). USDC itself can't be
-/// traded against itself, so the route is "none".
-function routeFor(tokenAddr: string): Route {
-  const doge = addresses.doge.toLowerCase();
-  const usdc = addresses.usdc.toLowerCase();
-  const t = tokenAddr.toLowerCase();
-  if (t === doge) return "tdoge-amm";
-  if (t === usdc) return "none";
-  return "unitflow";
-}
-
 /// Full swap form. Self-contained — manages its own amount, side, slippage,
-/// approvals, and quote polling. Used both inline in Pro view and inside
-/// the legacy TradeModal.
+/// approvals, and quote polling. Uses the DOGE FORGE Router for every swap;
+/// route discovery is simply `factory.getPair(token, USDC)` existing with
+/// non-zero reserves.
 export function SwapForm({
   token,
   enabled = true,
   className = "",
 }: {
   token: SwapToken;
-  /// If false, all hooks are disabled (e.g. when a parent modal is closed).
+  /// If false, read hooks are disabled (e.g. modal is closed).
   enabled?: boolean;
   className?: string;
 }) {
@@ -60,24 +46,21 @@ export function SwapForm({
   const from  = side === "buy" ? { address: quote.address, symbol: quote.symbol, decimals: quote.decimals } : token;
   const to    = side === "buy" ? token : { address: quote.address, symbol: quote.symbol, decimals: quote.decimals };
 
-  const route = routeFor(token.address);
-  const parsedIn = amount ? safeParse(amount, from.decimals) : 0n;
+  const sameToken = token.address.toLowerCase() === quote.address.toLowerCase();
+  const parsedIn  = amount ? safeParse(amount, from.decimals) : 0n;
 
-  // Confirm UnitFlow pair exists before enabling the unitflow route.
-  const { data: unitflowPairAddr } = useReadContract({
-    address: addresses.unitflowFactory, abi: unitflowFactoryAbi, functionName: "getPair",
-    args: route === "unitflow" ? [token.address, addresses.usdc] : undefined,
+  // Does a pair exist in our factory? Zero-address means tradable route missing.
+  const { data: pairAddr } = useReadContract({
+    address: addresses.factory, abi: forgeFactoryAbi, functionName: "getPair",
+    args: !sameToken ? [token.address, quote.address] : undefined,
     chainId: tempo.id,
-    query: { enabled: enabled && route === "unitflow", refetchInterval: 30_000 },
+    query: { enabled: enabled && !sameToken && !!addresses.factory, refetchInterval: 30_000 },
   });
-  const hasUnitflowPair = (unitflowPairAddr as `0x${string}` | undefined)
-    && (unitflowPairAddr as string).toLowerCase() !== ZERO;
-  const effectiveRoute: Route = route === "unitflow" && !hasUnitflowPair ? "none" : route;
+  const hasPair = (pairAddr as `0x${string}` | undefined)
+    && (pairAddr as string).toLowerCase() !== ZERO;
+  const routeAvailable = !sameToken && hasPair;
 
-  const spender =
-    effectiveRoute === "tdoge-amm" ? addresses.router :
-    effectiveRoute === "unitflow"  ? (HAS_AGGREGATOR ? addresses.aggregator : addresses.unitflowRouter) :
-    undefined;
+  const spender = routeAvailable ? addresses.forgeRouter : undefined;
 
   const { data: fromBal } = useReadContract({
     address: from.address, abi: erc20Abi, functionName: "balanceOf",
@@ -94,32 +77,20 @@ export function SwapForm({
   const needsApproval = (allowance as bigint | undefined) !== undefined
     && parsedIn > (allowance as bigint);
 
-  const { data: ammQuote } = useReadContract({
-    address: addresses.router, abi: routerAbi, functionName: "quote",
-    args: [from.address, parsedIn],
+  // Post-platform-fee quote straight from the router.
+  const { data: quoteData } = useReadContract({
+    address: addresses.forgeRouter, abi: forgeRouterAbi, functionName: "getAmountsOutAfterFee",
+    args: routeAvailable ? [parsedIn, [from.address, to.address] as const] : undefined,
     chainId: tempo.id,
-    query: { enabled: enabled && effectiveRoute === "tdoge-amm" && parsedIn > 0n, refetchInterval: 4000 },
+    query: { enabled: enabled && routeAvailable && parsedIn > 0n, refetchInterval: 4000 },
   });
-  const { data: unitflowQuote } = useReadContract({
-    address: HAS_AGGREGATOR ? addresses.aggregator : addresses.unitflowRouter,
-    abi: HAS_AGGREGATOR ? aggregatorAbi : unitflowRouterAbi,
-    functionName: HAS_AGGREGATOR ? "getAmountsOutAfterFee" : "getAmountsOut",
-    args: [parsedIn, [from.address, to.address] as const],
-    chainId: tempo.id,
-    query: { enabled: enabled && effectiveRoute === "unitflow" && parsedIn > 0n, refetchInterval: 4000 },
-  });
-
   const quoteOut = useMemo(() => {
-    if (effectiveRoute === "tdoge-amm") return ammQuote as bigint | undefined;
-    if (effectiveRoute === "unitflow") {
-      const arr = unitflowQuote as readonly bigint[] | undefined;
-      return arr && arr.length > 0 ? arr[arr.length - 1] : undefined;
-    }
-    return undefined;
-  }, [effectiveRoute, ammQuote, unitflowQuote]);
+    const arr = quoteData as readonly bigint[] | undefined;
+    return arr && arr.length > 0 ? arr[arr.length - 1] : undefined;
+  }, [quoteData]);
 
-  const minOut = quoteOut ? quoteOut - (quoteOut * BigInt(slippageBps)) / 10_000n : 0n;
-  const fb = fromBal as bigint | undefined;
+  const minOut       = quoteOut ? quoteOut - (quoteOut * BigInt(slippageBps)) / 10_000n : 0n;
+  const fb           = fromBal as bigint | undefined;
   const exceedsWallet = fb !== undefined && parsedIn > fb;
 
   async function doTx(
@@ -146,24 +117,13 @@ export function SwapForm({
   }
 
   function onSwap() {
-    if (!address || !parsedIn) return;
+    if (!address || !parsedIn || !routeAvailable) return;
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
-    if (effectiveRoute === "tdoge-amm") {
-      doTx("swap",
-        { address: addresses.router, abi: routerAbi, functionName: "swapExactIn",
-          args: [from.address, parsedIn, minOut, address, deadline] },
-        `${side === "buy" ? "Buying" : "Selling"} ${token.symbol}`,
-      );
-    } else if (effectiveRoute === "unitflow") {
-      doTx("swap",
-        HAS_AGGREGATOR
-          ? { address: addresses.aggregator, abi: aggregatorAbi, functionName: "swapExactTokensForTokens",
-              args: [parsedIn, minOut, [from.address, to.address] as const, address, deadline] }
-          : { address: addresses.unitflowRouter, abi: unitflowRouterAbi, functionName: "swapExactTokensForTokens",
-              args: [parsedIn, minOut, [from.address, to.address] as const, address, deadline] },
-        `${side === "buy" ? "Buying" : "Selling"} ${token.symbol}`,
-      );
-    }
+    doTx("swap",
+      { address: addresses.forgeRouter, abi: forgeRouterAbi, functionName: "swapExactTokensForTokens",
+        args: [parsedIn, minOut, [from.address, to.address] as const, address, deadline] },
+      `${side === "buy" ? "Buying" : "Selling"} ${token.symbol}`,
+    );
   }
 
   return (
@@ -217,9 +177,7 @@ export function SwapForm({
       <div className="mt-4 rounded-lg border border-line bg-bg-base p-3 space-y-2 text-xs">
         <Row label="Route">
           <span className="text-ink-muted">
-            {effectiveRoute === "tdoge-amm" ? "DOGE FORGE AMM"
-              : effectiveRoute === "unitflow" ? (HAS_AGGREGATOR ? "DOGE FORGE Aggregator (0.10% fee)" : "DOGE FORGE Aggregator")
-              : "No route"}
+            {routeAvailable ? "DOGE FORGE (0.10% fee)" : "No route"}
           </span>
         </Row>
         <Row label="You receive (est.)">
@@ -247,14 +205,13 @@ export function SwapForm({
       </div>
 
       <div className="mt-4">
-        {route === "none" ? (
-          <div className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2.5 text-[11px] text-red-300 leading-relaxed">
-            No trading route available for this pair. fDOGE trades against USDC in the
-            DOGE FORGE AMM. Other tokens need an external DEX.
-          </div>
-        ) : effectiveRoute === "none" ? (
+        {sameToken ? (
           <div className="rounded-md border border-line bg-bg-base px-3 py-2.5 text-[11px] text-ink-muted leading-relaxed">
-            {token.symbol}/USDC has no liquidity yet. A pool must be seeded before this pair is tradable.
+            {token.symbol} is the native quote asset — pick another market to trade.
+          </div>
+        ) : !routeAvailable ? (
+          <div className="rounded-md border border-line bg-bg-base px-3 py-2.5 text-[11px] text-ink-muted leading-relaxed">
+            {token.symbol}/{quote.symbol} has no liquidity yet. A pool must be seeded before this pair is tradable.
           </div>
         ) : needsApproval ? (
           <button

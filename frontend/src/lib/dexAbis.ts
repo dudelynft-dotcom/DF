@@ -50,8 +50,96 @@ export const routerAbi = [
   },
 ] as const;
 
-/// UnitFlow V2.5 — Uniswap V2-compatible DEX on Arc. We use it to route swaps
-/// for any non-fDOGE token pair (e.g. USDC/EURC, USDC/WUSDC).
+/// DOGE FORGE Factory — registry/deployer of TdogePair instances.
+export const forgeFactoryAbi = [
+  {
+    type: "function", name: "getPair", stateMutability: "view",
+    inputs: [{ type: "address" }, { type: "address" }],
+    outputs: [{ name: "pair", type: "address" }],
+  },
+  {
+    type: "function", name: "allPairsLength", stateMutability: "view",
+    inputs: [], outputs: [{ type: "uint256" }],
+  },
+] as const;
+
+/// DOGE FORGE Router — multi-pair router with built-in platform fee skim
+/// and path-based swaps. Replaces the earlier TdogeRouter + ForgeAggregator
+/// stack once deployed.
+export const forgeRouterAbi = [
+  {
+    type: "function", name: "platformFeeBps", stateMutability: "view",
+    inputs: [], outputs: [{ type: "uint16" }],
+  },
+  {
+    type: "function", name: "feeEnabled", stateMutability: "view",
+    inputs: [], outputs: [{ type: "bool" }],
+  },
+  {
+    type: "function", name: "getAmountsOut", stateMutability: "view",
+    inputs: [
+      { name: "amountIn", type: "uint256" },
+      { name: "path",     type: "address[]" },
+    ],
+    outputs: [{ type: "uint256[]" }],
+  },
+  {
+    type: "function", name: "getAmountsOutAfterFee", stateMutability: "view",
+    inputs: [
+      { name: "amountIn", type: "uint256" },
+      { name: "path",     type: "address[]" },
+    ],
+    outputs: [{ type: "uint256[]" }],
+  },
+  {
+    type: "function", name: "swapExactTokensForTokens", stateMutability: "nonpayable",
+    inputs: [
+      { name: "amountIn",     type: "uint256" },
+      { name: "amountOutMin", type: "uint256" },
+      { name: "path",         type: "address[]" },
+      { name: "to",           type: "address" },
+      { name: "deadline",     type: "uint256" },
+    ],
+    outputs: [{ type: "uint256[]" }],
+  },
+  {
+    type: "function", name: "addLiquidity", stateMutability: "nonpayable",
+    inputs: [
+      { name: "tokenA",         type: "address" },
+      { name: "tokenB",         type: "address" },
+      { name: "amountADesired", type: "uint256" },
+      { name: "amountBDesired", type: "uint256" },
+      { name: "amountAMin",     type: "uint256" },
+      { name: "amountBMin",     type: "uint256" },
+      { name: "to",             type: "address" },
+      { name: "deadline",       type: "uint256" },
+    ],
+    outputs: [
+      { name: "amountA",   type: "uint256" },
+      { name: "amountB",   type: "uint256" },
+      { name: "liquidity", type: "uint256" },
+    ],
+  },
+  {
+    type: "function", name: "removeLiquidity", stateMutability: "nonpayable",
+    inputs: [
+      { name: "tokenA",      type: "address" },
+      { name: "tokenB",      type: "address" },
+      { name: "liquidity",   type: "uint256" },
+      { name: "amountAMin",  type: "uint256" },
+      { name: "amountBMin",  type: "uint256" },
+      { name: "to",          type: "address" },
+      { name: "deadline",    type: "uint256" },
+    ],
+    outputs: [
+      { name: "amountA", type: "uint256" },
+      { name: "amountB", type: "uint256" },
+    ],
+  },
+] as const;
+
+/// UnitFlow V2.5 — legacy ABI retained for compat while we migrate. Safe to
+/// remove once every caller has switched to forgeRouterAbi.
 export const unitflowFactoryAbi = [
   {
     type: "function", name: "getPair", stateMutability: "view",

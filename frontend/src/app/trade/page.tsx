@@ -6,7 +6,7 @@ import { TradeModal, type TradeToken } from "@/components/TradeModal";
 import { PriceChart } from "@/components/PriceChart";
 import { SwapForm } from "@/components/SwapForm";
 import { useReadContract } from "wagmi";
-import { unitflowFactoryAbi } from "@/lib/dexAbis";
+import { forgeFactoryAbi } from "@/lib/dexAbis";
 import { tempo } from "@/config/chain";
 import { useTokenMetrics, fmtUsd, fmtSupply, fmtPct, type TokenMetrics } from "@/lib/metrics";
 
@@ -596,24 +596,24 @@ function ProDetail({
 }
 
 /// Resolves the correct pair address for a given token so PriceChart can
-/// fetch its candles. fDOGE maps to our TdogePair; any other token maps to
-/// the UnitFlow V2.5 pair for (token, USDC), read from the factory.
+/// fetch its candles. fDOGE maps to our historical TdogePair (kept for the
+/// Miner/LM flow); any other token resolves via `TdogeFactory.getPair`.
 function ChartForToken({ token }: { token: TileToken }) {
   const isDoge = token.address.toLowerCase() === addresses.doge.toLowerCase();
-  const { data: unitflowPair } = useReadContract({
-    address: addresses.unitflowFactory,
-    abi: unitflowFactoryAbi,
+  const { data: registryPair } = useReadContract({
+    address: addresses.factory,
+    abi: forgeFactoryAbi,
     functionName: "getPair",
     args: !isDoge ? [token.address, addresses.usdc] : undefined,
     chainId: tempo.id,
-    query: { enabled: !isDoge, refetchInterval: 60_000 },
+    query: { enabled: !isDoge && !!addresses.factory, refetchInterval: 60_000 },
   });
 
   let pair: `0x${string}` | undefined;
   if (isDoge) {
     pair = addresses.pair;
   } else {
-    const p = unitflowPair as `0x${string}` | undefined;
+    const p = registryPair as `0x${string}` | undefined;
     if (p && p.toLowerCase() !== "0x0000000000000000000000000000000000000000") pair = p;
   }
 
