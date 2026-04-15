@@ -404,14 +404,17 @@ function ProView({
   onSelect: (t: TileToken) => void;
 }) {
   return (
-    <div className="grid lg:grid-cols-[280px_1fr] gap-4 min-h-[600px]">
+    <div className="grid lg:grid-cols-[280px_minmax(0,1fr)] gap-4 min-h-[600px]">
       {/* Left: market list (verified only — unverified noise lives in /DFAdmin) */}
-      <aside className="rounded-xl border border-line bg-bg-surface overflow-hidden flex flex-col">
+      <aside className="rounded-xl border border-line bg-bg-surface overflow-hidden flex flex-col min-w-0">
         <MarketListGroup title="Verified" tokens={verified} metricsByAddr={metricsByAddr} selected={selected} onSelect={onSelect} showTick />
       </aside>
 
-      {/* Right: detail + swap trigger */}
-      <section className="rounded-xl border border-line bg-bg-surface p-6 flex flex-col gap-6">
+      {/* Right: detail + swap trigger.
+          min-w-0 + overflow-hidden needed so the chart canvas and long
+          contract addresses can't push the grid child past viewport on
+          narrow screens. */}
+      <section className="rounded-xl border border-line bg-bg-surface p-4 sm:p-6 flex flex-col gap-6 min-w-0 overflow-hidden">
         {selected ? (
           <ProDetail token={selected} metrics={metricsByAddr[selected.address.toLowerCase()]} />
         ) : (
@@ -500,12 +503,13 @@ function ProDetail({
 
   return (
     <>
-      {/* Header */}
-      <div className="flex items-center gap-4">
+      {/* Header — stacks on narrow screens so the badge doesn't collide
+          with the price, and long symbols/addresses can truncate cleanly. */}
+      <div className="flex flex-wrap items-center gap-3 sm:gap-4 min-w-0">
         <TokenIcon key={token.address} token={token} size={48} />
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="font-display text-3xl tracking-tight text-ink">{token.symbol}</h2>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="font-display text-2xl sm:text-3xl tracking-tight text-ink">{token.symbol}</h2>
             {token.verified && <VerifiedTick />}
             {token.kind === "project" && (
               <span className="text-[10px] uppercase tracking-wider text-gold-300 bg-gold-400/10 border border-gold-400/30 rounded-full px-2 py-0.5 whitespace-nowrap">
@@ -513,20 +517,22 @@ function ProDetail({
               </span>
             )}
           </div>
-          <div className="text-xs text-ink-muted">{token.name}</div>
+          <div className="text-xs text-ink-muted truncate">{token.name}</div>
         </div>
-        <div className="ml-auto text-right">
-          <div className="font-display text-3xl tabular text-ink">{fmtUsd(metrics?.priceUsd ?? null)}</div>
+        <div className="text-right shrink-0 ml-auto">
+          <div className="font-display text-2xl sm:text-3xl tabular text-ink">{fmtUsd(metrics?.priceUsd ?? null)}</div>
           <div className={`text-xs tabular ${changeClass}`}>{fmtPct(change)} (24h)</div>
         </div>
       </div>
 
       {/* Chart + swap panel, Hyperliquid-style 2-column. Stacks on mobile. */}
-      <div className="grid lg:grid-cols-[1fr_320px] gap-4">
-        <div className="flex flex-col gap-4">
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-4">
+        <div className="flex flex-col gap-4 min-w-0">
           {/* Price chart — our own pair for fDOGE, UnitFlow pair lookup for the
-              rest. Backend indexes both as long as they exist. */}
-          <div className="h-48 sm:h-64 rounded-lg border border-line bg-bg-base overflow-hidden">
+              rest. Backend indexes both as long as they exist.
+              `min-w-0` on the parent + `overflow-hidden` here keep the chart
+              canvas from dragging the grid column wider than the viewport. */}
+          <div className="h-48 sm:h-64 rounded-lg border border-line bg-bg-base overflow-hidden min-w-0">
             <ChartForToken token={token} />
           </div>
 
