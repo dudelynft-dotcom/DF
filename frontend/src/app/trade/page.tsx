@@ -113,7 +113,11 @@ export default function TradePage() {
   const [view, setView] = useState<"pro" | "list" | "grid">("list");
   useEffect(() => {
     try {
+      const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
       const saved = window.localStorage.getItem("trade.view");
+      // Pro view assumes a wide layout (market list + chart + swap side-by-side).
+      // On mobile, force List regardless of saved preference.
+      if (isMobile) { setView("list"); return; }
       if (saved === "pro" || saved === "list" || saved === "grid") setView(saved);
     } catch { /* private-mode browsers throw on localStorage */ }
   }, []);

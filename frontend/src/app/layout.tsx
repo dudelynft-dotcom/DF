@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Fraunces } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -15,11 +15,21 @@ const fraunces = Fraunces({
 export const metadata: Metadata = {
   title: "DOGE FORGE · Arc",
   description: "Mine fDOGE. Trade on Arc.",
-  icons: {
-    icon: [{ url: "/doge.png", type: "image/png" }],
-    shortcut: "/doge.png",
-    apple: "/doge.png",
+  applicationName: "DOGE FORGE",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "DOGE FORGE",
+    statusBarStyle: "black-translucent",
   },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0E0D08",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
