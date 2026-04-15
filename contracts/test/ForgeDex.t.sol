@@ -8,6 +8,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {TdogeFactory} from "../src/TdogeFactory.sol";
 import {TdogePair}    from "../src/TdogePair.sol";
 import {ForgeRouter}  from "../src/ForgeRouter.sol";
+import {DOGE}         from "../src/DOGE.sol";
 
 /// @dev Plain ERC-20 with mintable faucet for test-setup only.
 contract MockToken is ERC20 {
@@ -286,5 +287,99 @@ contract ForgeDexTest is Test {
             aAmt, bAmt, 0, 0, alice, block.timestamp + 300
         );
         vm.stopPrank();
+    }
+}
+
+/// Regression: selling real fDOGE (which has a 0.1% transfer fee) through
+/// ForgeRouter must not revert. Prior to the fix, the router wasn't in the
+/// fDOGE fee-exempt set, so transferFrom(user → router) skimmed 0.1% and the
+/// router's subsequent transfer(router → pair) went short, reverting with
+/// ERC20InsufficientBalance. Keep this test to pin the wiring.
+contract ForgeRouter_DogeTransferFeeRegression is Test {
+    address admin   = address(0xA11CE);
+    address feeSink = address(0xF11FE);
+    address alice   = address(0xA11);
+
+    DOGE         doge;
+    MockToken    usdc;
+    TdogeFactory factory;
+    ForgeRouter  router;
+    TdogePair    pair;
+
+    function setUp() public {
+        vm.startPrank(admin);
+        doge    = new DOGE(admin, address(0xDEAD));
+        usdc    = new MockToken("USDC", "USDC", 6);
+        factory = new TdogeFactory(admin);
+        router  = new ForgeRouter(admin, address(factory), feeSink);
+        doge.setMinter(admin, true);
+        vm.stopPrank();
+
+        pair = new TdogePair(address(doge), address(usdc));
+        vm.prank(admin);
+        factory.registerPair(address(doge), address(usdc), address(pair));
+
+        // Seed the pool: 100k fDOGE / 100k USDC. Alice has extra to sell.
+        vm.startPrank(admin);
+        doge.mint(alice, 200_000 ether);
+        vm.stopPrank();
+        usdc.mint(alice, 100_000 * 1e6);
+
+        vm.startPrank(alice);
+        // Pool + alice's wallet must be fee-exempt or _seed would mint LP
+        // against a short balance. The real deploy does this; mirror it here.
+        vm.stopPrank();
+        vm.startPrank(admin);
+        doge.setFeeExempt(address(pair), true);
+        doge.setFeeExempt(alice, true);
+        vm.stopPrank();
+
+        vm.startPrank(alice);
+        doge.approve(address(router), type(uint256).max);
+        usdc.approve(address(router), type(uint256).max);
+        // Skip router's transfer fee too so addLiquidity moves full amounts.
+        vm.stopPrank();
+        vm.prank(admin);
+        doge.setFeeExempt(address(router), true); // <-- the critical wiring
+
+        vm.prank(alice);
+        router.addLiquidity(
+            address(doge), address(usdc),
+            100_000 ether, 100_000 * 1e6, 0, 0, alice, block.timestamp + 300
+        );
+
+        // Un-exempt alice so her sell tests hit the real user-side behaviour.
+        vm.prank(admin);
+        doge.setFeeExempt(alice, false);
+    }
+
+    function test_sell_fDOGE_does_not_revert_when_router_is_fee_exempt() public {
+        address[] memory path = new address[](2);
+        path[0] = address(doge);
+        path[1] = address(usdc);
+
+        vm.prank(alice);
+        router.swapExactTokensForTokens(
+            1 ether, 0, path, alice, block.timestamp + 300
+        );
+        assertGt(usdc.balanceOf(alice), 0, "alice received USDC");
+    }
+
+    /// Inverse: if the router is NOT fee-exempt, the same sell reverts. Pins
+    /// the behaviour so anyone reading the test understands why the exempt
+    /// wiring matters.
+    function test_sell_fDOGE_reverts_when_router_is_NOT_fee_exempt() public {
+        vm.prank(admin);
+        doge.setFeeExempt(address(router), false);
+
+        address[] memory path = new address[](2);
+        path[0] = address(doge);
+        path[1] = address(usdc);
+
+        vm.prank(alice);
+        vm.expectRevert();
+        router.swapExactTokensForTokens(
+            1 ether, 0, path, alice, block.timestamp + 300
+        );
     }
 }

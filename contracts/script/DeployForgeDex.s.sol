@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Script, console2} from "forge-std/Script.sol";
 import {TdogeFactory} from "../src/TdogeFactory.sol";
 import {ForgeRouter} from "../src/ForgeRouter.sol";
+import {DOGE} from "../src/DOGE.sol";
 
 /// Deploy the DOGE FORGE owned DEX stack:
 ///   1. TdogeFactory
@@ -50,6 +51,12 @@ contract DeployForgeDex is Script {
         address eurcPair  = factory.createPair(eurc,  usdc);
         address usycPair  = factory.createPair(usyc,  usdc);
         address wusdcPair = factory.createPair(wusdc, usdc);
+
+        // fDOGE charges a 0.1% transfer fee. Any router that pulls fDOGE in
+        // and forwards it to a pair must be fee-exempt, otherwise the router
+        // ends up short on the second hop and swapExactTokensForTokens reverts
+        // on sell-fDOGE. Requires the deployer to be the DOGE owner.
+        DOGE(doge).setFeeExempt(address(router), true);
 
         vm.stopBroadcast();
 
