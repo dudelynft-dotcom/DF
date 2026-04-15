@@ -1,4 +1,8 @@
+"use client";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+
+type Session = { xHandle: string; wallet: string | null } | null;
 
 // Landing. Unauthenticated destination. Two jobs:
 //   1. Set expectations (what points are, what they might become).
@@ -8,6 +12,24 @@ import Link from "next/link";
 // token, allocation, or airdrop. Legal posture: points are provisional
 // engagement metrics; utility is subject to change.
 export default function Home() {
+  const [me, setMe] = useState<Session | undefined>(undefined);
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setMe(j as Session))
+      .catch(() => setMe(null));
+  }, []);
+
+  // Auth-aware CTA copy. Three states:
+  //   - undefined/null → "Connect X to begin"
+  //   - connected, no wallet bound → nudge to finish connect
+  //   - fully bound → "Open the forge"
+  const cta = me == null
+    ? { href: "/connect",    label: "Connect X to begin →" }
+    : !me.wallet
+    ? { href: "/connect",    label: "Bind your wallet →" }
+    : { href: "/tasks",      label: "Open the forge →" };
+
   return (
     <>
       <section className="bg-hero-glow">
@@ -25,16 +47,23 @@ export default function Home() {
             on-chain signal that you were here early.
           </p>
 
+          {me && (
+            <div className="mt-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/5 text-emerald-300 text-xs">
+              <Dot /> Connected as @{me.xHandle}
+              {!me.wallet && <span className="text-amber-300 ml-1">· bind wallet to continue</span>}
+            </div>
+          )}
+
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <Link
-              href="/connect"
+              href={cta.href}
               className="
                 inline-flex items-center gap-2 px-5 py-3 rounded-lg
                 bg-gold-400 text-bg-base font-medium
                 hover:bg-gold-300 transition-colors
               "
             >
-              Connect X to begin →
+              {cta.label}
             </Link>
             <Link
               href="/leaderboard"
@@ -122,20 +151,22 @@ export default function Home() {
       <section className="border-t border-line">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 text-center">
           <h2 className="font-display text-4xl sm:text-5xl tracking-tightest">
-            Ready when you are.
+            {me?.wallet ? "See you inside." : "Ready when you are."}
           </h2>
           <p className="mt-4 text-ink-muted">
-            Takes 30 seconds. First task unlocks the moment you connect.
+            {me?.wallet
+              ? `You're connected as @${me.xHandle}. Jump back to your task dashboard.`
+              : "Takes 30 seconds. First task unlocks the moment you connect."}
           </p>
           <Link
-            href="/connect"
+            href={cta.href}
             className="
               mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-lg
               bg-gold-400 text-bg-base font-medium text-lg
               hover:bg-gold-300 transition-colors
             "
           >
-            Connect X →
+            {cta.label}
           </Link>
         </div>
       </section>
@@ -151,6 +182,10 @@ function Step({ n, title, body }: { n: string; title: string; body: string }) {
       <p className="mt-2 text-sm text-ink-muted leading-relaxed">{body}</p>
     </div>
   );
+}
+
+function Dot() {
+  return <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />;
 }
 
 function Cat({ label, count, hint }: { label: string; count: string; hint: string }) {

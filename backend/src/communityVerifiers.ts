@@ -131,24 +131,50 @@ register("daily-checkin", async (user, task) => {
 });
 
 // ============================================================
-//                      DAILY TWEET — X API verification
+//                      DAILY TWEET — oEmbed + snowflake
 // ============================================================
-// User submits a tweet URL. We extract the tweet id, fetch via the X
-// app-only bearer token, and verify:
-//   - author_id matches the user's bound X id (no quote-tweet farming)
-//   - text contains every required token from payload.requireTokens
-//   - tweet is < 24h old (so users can't farm old tweets)
-//   - tweet id not previously submitted by anyone
+// Verification without a paid X API tier:
+//   - Tweet id parsed from URL.
+//   - Age derived from the id itself: X snowflake IDs encode the
+//     creation ms (epoch 1288834974657).
+//   - Author handle + text pulled from publish.twitter.com/oembed
+//     (public, unauthenticated, no rate limit).
 //
-// Successful submissions write to community_daily_tweets in addition to
-// community_completions; the UNIQUE (user_id, day) constraint blocks
-// multiple submissions per day at the DB layer.
+// Successful submissions write to community_daily_tweets; the UNIQUE
+// (user_id, day) constraint blocks multiple per day at the DB layer.
+
+const X_SNOWFLAKE_EPOCH = 1288834974657;
 
 function tweetIdFromUrl(url: string): string | null {
-  // Accept twitter.com, x.com, mobile, with optional query/fragment.
-  // Tweet ID is the last numeric path segment after /status/.
   const m = url.match(/(?:twitter|x)\.com\/[^/]+\/status\/(\d{5,})/i);
   return m?.[1] ?? null;
+}
+function tweetTimestampMs(id: string): number | null {
+  try {
+    const n = BigInt(id);
+    // The top 22 bits of the id are the ms-since-Twitter-epoch timestamp.
+    return Number((n >> 22n)) + X_SNOWFLAKE_EPOCH;
+  } catch { return null; }
+}
+function handleFromAuthorUrl(u: string): string | null {
+  const m = u.match(/(?:twitter|x)\.com\/([A-Za-z0-9_]{1,15})/i);
+  return m?.[1] ?? null;
+}
+function textFromOembedHtml(html: string): string {
+  // oEmbed returns: <blockquote ...><p lang="..." dir="...">TWEET TEXT</p>...
+  // Strip tags; decode HTML entities in the remaining text.
+  const pMatch = html.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+  const raw = pMatch?.[1] ?? html;
+  return raw
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 register("daily-tweet", async (user, task, body) => {
@@ -157,59 +183,51 @@ register("daily-tweet", async (user, task, body) => {
   const id = tweetIdFromUrl(url);
   if (!id) return { ok: false, reason: "bad_tweet_url" };
 
-  // 1-per-UTC-day cap, enforced before we burn an X API call.
+  // 1-per-UTC-day cap.
   const today = new Date().toISOString().slice(0, 10);
-  const existingToday = db.prepare(
-    `SELECT id FROM community_daily_tweets WHERE user_id = ? AND day = ?`
-  ).get(user.id, today) as { id: number } | undefined;
-  if (existingToday) return { ok: false, reason: "already_today" };
-
-  // Tweet ids are globally unique on X; reject if anyone else already
-  // claimed it (catches resubmission farming after wallet rebind).
-  const dupTweet = db.prepare(
-    `SELECT id FROM community_daily_tweets WHERE tweet_id = ?`
-  ).get(id) as { id: number } | undefined;
-  if (dupTweet) return { ok: false, reason: "tweet_already_claimed" };
-
-  // Fetch the tweet. App-bearer scope is read-only public.
-  const bearer = process.env.AUTH_TWITTER_BEARER;
-  if (!bearer) return { ok: false, reason: "x_bearer_unset" };
-
-  let tweet;
-  try {
-    const res = await fetch(
-      `https://api.twitter.com/2/tweets/${id}?tweet.fields=created_at,author_id,text`,
-      { headers: { "Authorization": `Bearer ${bearer}` } },
-    );
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error("[daily-tweet] x api", res.status, text.slice(0, 200));
-      return { ok: false, reason: "x_api_error", meta: { status: res.status } };
-    }
-    const j = await res.json() as { data?: { id: string; text: string; author_id: string; created_at: string } };
-    if (!j.data) return { ok: false, reason: "tweet_not_found" };
-    tweet = j.data;
-  } catch (e: unknown) {
-    return { ok: false, reason: "x_api_unreachable", meta: { msg: (e as Error)?.message } };
+  if (db.prepare(`SELECT id FROM community_daily_tweets WHERE user_id = ? AND day = ?`).get(user.id, today)) {
+    return { ok: false, reason: "already_today" };
+  }
+  // Tweet ids are globally unique — no double-claim across users.
+  if (db.prepare(`SELECT id FROM community_daily_tweets WHERE tweet_id = ?`).get(id)) {
+    return { ok: false, reason: "tweet_already_claimed" };
   }
 
-  if (tweet.author_id !== user.x_id) return { ok: false, reason: "wrong_author" };
-
-  // Age gate: 24h.
-  const ageMs = Date.now() - Date.parse(tweet.created_at);
+  // Age gate via snowflake — no API call needed.
+  const tsMs = tweetTimestampMs(id);
+  if (tsMs == null) return { ok: false, reason: "bad_tweet_url" };
+  const ageMs = Date.now() - tsMs;
+  if (ageMs < 0)                 return { ok: false, reason: "tweet_in_future" };
   if (ageMs > 24 * 3600 * 1000) return { ok: false, reason: "tweet_too_old" };
-  if (ageMs < 0)                 return { ok: false, reason: "tweet_in_future" }; // clock skew defensive
 
-  // Required-tokens check is case-insensitive.
+  // Fetch oEmbed. Public, unauthenticated, caches at X's edge.
+  let oe: { author_name?: string; author_url?: string; html?: string };
+  try {
+    const res = await fetch(
+      `https://publish.twitter.com/oembed?omit_script=1&url=${encodeURIComponent(url)}`,
+      { headers: { "User-Agent": "DogeForgeCommunity/1.0" } },
+    );
+    if (res.status === 404) return { ok: false, reason: "tweet_not_found" };
+    if (!res.ok) return { ok: false, reason: "oembed_error", meta: { status: res.status } };
+    oe = await res.json();
+  } catch (e: unknown) {
+    return { ok: false, reason: "oembed_unreachable", meta: { msg: (e as Error)?.message } };
+  }
+
+  // Author handle comparison (case-insensitive).
+  const handle = oe.author_url ? handleFromAuthorUrl(oe.author_url) : null;
+  if (!handle || handle.toLowerCase() !== user.x_handle.toLowerCase()) {
+    return { ok: false, reason: "wrong_author", meta: { expected: user.x_handle, got: handle } };
+  }
+
+  // Required tokens.
   const required = (safeJson(task.payload) as { requireTokens?: string[] }).requireTokens ?? [];
-  const text = tweet.text.toLowerCase();
+  const text = textFromOembedHtml(oe.html ?? "").toLowerCase();
   const missing = required.filter((tok) => !text.includes(tok.toLowerCase()));
   if (missing.length > 0) {
     return { ok: false, reason: "missing_tokens", meta: { missing, required } };
   }
 
-  // Persist for audit + uniqueness; the claim handler then writes the
-  // ledger entry.
   db.prepare(
     `INSERT INTO community_daily_tweets (user_id, tweet_id, url, day, status, checked_at)
      VALUES (?, ?, ?, ?, 'verified', ?)`

@@ -76,15 +76,30 @@ community.post("/bind-wallet", (req, res) => {
     if (existing.some((r) => r.wallet === w))  return res.status(409).json({ error: "wallet_already_bound" });
   }
 
-  // Referrer resolution — slug format "@handle" or raw x id. Invalid
-  // codes silently fail to a null referrer so a bad share link doesn't
-  // break signup.
+  // Referrer resolution — accepts "handle", "@handle", or raw x_id.
+  // Silent fallback to null on miss so a bad share link never blocks
+  // signup.
   let referrerId: number | null = null;
   if (referrerCode) {
-    const lookup = referrerCode.startsWith("@")
-      ? db.prepare(`SELECT id FROM community_users WHERE x_handle = ? COLLATE NOCASE`).get(referrerCode.slice(1))
-      : db.prepare(`SELECT id FROM community_users WHERE x_id = ?`).get(referrerCode);
-    if (lookup && (lookup as any).id) referrerId = (lookup as any).id;
+    const raw = referrerCode.replace(/^@/, "");
+    const byHandle = db.prepare(
+      `SELECT id FROM community_users WHERE x_handle = ? COLLATE NOCASE LIMIT 1`
+    ).get(raw) as { id: number } | undefined;
+    if (byHandle?.id) {
+      referrerId = byHandle.id;
+    } else if (/^\d+$/.test(raw)) {
+      const byId = db.prepare(
+        `SELECT id FROM community_users WHERE x_id = ?`
+      ).get(raw) as { id: number } | undefined;
+      if (byId?.id) referrerId = byId.id;
+    }
+    // Self-referral prevention: user's own X id.
+    if (referrerId != null) {
+      const self = db.prepare(
+        `SELECT x_id FROM community_users WHERE id = ?`
+      ).get(referrerId) as { x_id: string } | undefined;
+      if (self?.x_id === xId) referrerId = null;
+    }
   }
 
   const now = Math.floor(Date.now() / 1000);

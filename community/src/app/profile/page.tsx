@@ -193,7 +193,7 @@ function ReferralCard({ handle, count }: { handle: string; count: number }) {
   const [copied, setCopied] = useState(false);
   // Origin works in dev (localhost) and in prod (community.dogeforge.fun).
   const origin = typeof window !== "undefined" ? window.location.origin : "https://community.dogeforge.fun";
-  const link = `${origin}/?ref=@${handle}`;
+  const link = `${origin}/?ref=${handle}`;
   const onCopy = async () => {
     try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); }
     catch { /* ignore */ }

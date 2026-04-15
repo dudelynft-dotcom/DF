@@ -172,7 +172,6 @@ const seedTask = db.prepare(`
 const SEED = [
   // --- Social (one-time) ---
   { slug: "follow-x",        kind: "social", title: "Follow @DogeForgefun on X", description: "Follow the official DOGE FORGE account.", points: 100, max: 1, payload: '{"handle":"DogeForgefun"}', sort: 10 },
-  { slug: "follow-arc",      kind: "social", title: "Follow @arc_network on X",    description: "Follow the Arc network account.",         points: 50,  max: 1, payload: '{"handle":"arc_network"}',   sort: 11 },
   { slug: "retweet-launch",  kind: "social", title: "Retweet the launch post",     description: "Retweet our pinned launch announcement.", points: 75,  max: 1, payload: '{}',                        sort: 12 },
   { slug: "join-telegram",   kind: "social", title: "Join the Telegram",           description: "Hop in the community Telegram.",          points: 50,  max: 1, payload: '{}',                        sort: 13 },
 
@@ -192,7 +191,7 @@ const SEED = [
   { slug: "claim-fdoge-name", kind: "identity", title: "Claim your .fdoge identity", description: "Register your on-chain name at TdogeNames.", points: 300, max: 1, payload: '{}', sort: 40 },
 
   // --- Daily + streak ---
-  { slug: "daily-tweet",   kind: "daily", title: "Daily tweet",    description: "Tweet about DOGE FORGE daily with $FDOGE and @DogeForgefun. 1 per day.", points: 25, max: -1, payload: '{"requireTokens":["$FDOGE","@DogeForgefun"]}', sort: 50 },
+  { slug: "daily-tweet",   kind: "daily", title: "Daily tweet",    description: "Tweet about DOGE FORGE daily with $FDOGE and @DogeForgefun. 1 per day.", points: 100, max: -1, payload: '{"requireTokens":["$FDOGE","@DogeForgefun"]}', sort: 50 },
   { slug: "daily-checkin", kind: "daily", title: "Daily check-in", description: "Open the app daily. 7-day streak = +50 bonus, 30-day = +500.",            points: 5,  max: -1, payload: '{}',                                           sort: 51 },
 
   // --- Quiz (Step 9) ---
@@ -200,3 +199,7 @@ const SEED = [
 ];
 
 for (const t of SEED) seedTask.run(t);
+
+// One-off migrations for previously-seeded rows. Safe to re-run.
+db.prepare(`UPDATE community_task_defs SET active = 0 WHERE slug = 'follow-arc'`).run();
+db.prepare(`UPDATE community_task_defs SET points = 100 WHERE slug = 'daily-tweet'`).run();

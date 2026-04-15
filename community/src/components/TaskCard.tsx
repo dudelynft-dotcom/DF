@@ -222,6 +222,8 @@ function friendly(reason?: string, meta?: Record<string, unknown>): string {
     case "x_bearer_unset":          return "Backend X bearer token not configured.";
     case "x_api_error":             return "X API rejected the lookup.";
     case "x_api_unreachable":       return "Couldn't reach X. Try again.";
+    case "oembed_error":            return "X didn't return the tweet. Check the URL.";
+    case "oembed_unreachable":      return "Couldn't reach X. Try again.";
     case "tweet_not_found":         return "Tweet not found or private.";
     case "wrong_author":            return "That tweet isn't from your linked X account.";
     case "tweet_too_old":           return "Tweet must be from the last 24 hours.";
