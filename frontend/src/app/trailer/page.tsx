@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from "react";
 const W = 1920;
 const H = 1080;
 const FPS = 30;
-const DURATION = 20; // seconds
+const DURATION = 22; // seconds — extended 2s to fit the Doge scene
 
 // Brand palette — kept local so this file is fully portable.
 const BG      = "#0E0D08";
@@ -46,16 +46,28 @@ export default function Trailer() {
   const [mode, setMode] = useState<"idle" | "preview" | "recording" | "done">("idle");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const dogeImgRef = useRef<HTMLImageElement | null>(null);
 
+  // Load brand fonts AND the doge sprite before enabling record.
+  // Drawing before fonts load produces Times-fallback frames; drawing
+  // before the sprite loads shows a gap in the run scene.
   useEffect(() => {
-    if (typeof document !== "undefined" && document.fonts) {
-      Promise.all([
-        document.fonts.load("700 160px Fraunces"),
-        document.fonts.load("700 48px Inter"),
-      ]).then(() => setFontsReady(true));
-    } else {
-      setFontsReady(true);
-    }
+    const fontsP = document?.fonts
+      ? Promise.all([
+          document.fonts.load("700 160px Fraunces"),
+          document.fonts.load("700 48px Inter"),
+        ])
+      : Promise.resolve();
+
+    const img = new Image();
+    img.src = "/doge.png";
+    const imgP = new Promise<void>((res) => {
+      img.onload  = () => { dogeImgRef.current = img; res(); };
+      img.onerror = () => res(); // don't block on missing sprite
+    });
+
+    Promise.all([fontsP, imgP]).then(() => setFontsReady(true));
+
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       recorderRef.current?.stop();
@@ -67,7 +79,7 @@ export default function Trailer() {
     if (!fontsReady) return;
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
-    drawFrame(ctx, 0);
+    drawFrame(ctx, 0, dogeImgRef.current);
   }, [fontsReady]);
 
   const stopLoop = () => {
@@ -79,14 +91,15 @@ export default function Trailer() {
     const t = (performance.now() - startRef.current) / 1000;
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const doge = dogeImgRef.current;
     if (t >= DURATION) {
-      drawFrame(canvas.getContext("2d")!, DURATION);
+      drawFrame(canvas.getContext("2d")!, DURATION, doge);
       setProgress(1);
       if (recorderRef.current?.state === "recording") recorderRef.current.stop();
       stopLoop();
       return;
     }
-    drawFrame(canvas.getContext("2d")!, t);
+    drawFrame(canvas.getContext("2d")!, t, doge);
     setProgress(t / DURATION);
     rafRef.current = requestAnimationFrame(loop);
   };
@@ -224,7 +237,7 @@ export default function Trailer() {
 //                       DRAWING
 // ============================================================
 
-function drawFrame(ctx: CanvasRenderingContext2D, t: number) {
+function drawFrame(ctx: CanvasRenderingContext2D, t: number, doge: HTMLImageElement | null) {
   // Base fill
   ctx.fillStyle = BG;
   ctx.fillRect(0, 0, W, H);
@@ -236,13 +249,21 @@ function drawFrame(ctx: CanvasRenderingContext2D, t: number) {
   ctx.fillStyle = grd;
   ctx.fillRect(0, 0, W, H);
 
+  // New timeline (total 22s):
+  //   0–2   intro sweep + DF monogram
+  //   2–10  three 2.5–3s tagline scenes
+  //   10–13 triptych (compressed from 4 → 3)
+  //   13–16 points counter
+  //   16–19 DOGE RUN across the screen (new 3s scene)
+  //   19–22 outro — DF monogram returns + "Season 1 is live"
   if (t < 2)          sceneIntro(ctx, t);
   else if (t < 4.5)   sceneTagline(ctx, t - 2,   2.5, "Mine fDOGE.");
   else if (t < 7)     sceneTagline(ctx, t - 4.5, 2.5, "Trade on Arc.");
   else if (t < 10)    sceneTagline(ctx, t - 7,   3,   "Build your identity.");
-  else if (t < 14)    sceneTriptych(ctx, t - 10, 4);
-  else if (t < 17)    scenePoints(ctx, t - 14,   3);
-  else                sceneOutro(ctx, t - 17,    3);
+  else if (t < 13)    sceneTriptych(ctx, t - 10, 3);
+  else if (t < 16)    scenePoints(ctx, t - 13,   3);
+  else if (t < 19)    sceneDogeRun(ctx, t - 16,  3, doge);
+  else                sceneOutro(ctx, t - 19,    3);
 
   // Persistent watermark
   ctx.font = '500 24px Inter, system-ui';
@@ -432,6 +453,105 @@ function scenePoints(ctx: CanvasRenderingContext2D, t: number, len: number) {
   ctx.restore();
 }
 
+// 3s scene: doge bounds across the frame right → left, bouncing
+// with a convincing gait. We can't true-animate a single sprite,
+// but translation + vertical sin-wave bounce + subtle scale/tilt
+// + morphing shadow sells the illusion of hopping motion.
+function sceneDogeRun(ctx: CanvasRenderingContext2D, t: number, len: number, doge: HTMLImageElement | null) {
+  const p = Math.min(1, t / len);            // 0..1 across the scene
+  const enter = Math.min(1, t / 0.35);
+  const exit  = Math.max(0, Math.min(1, (len - t) / 0.35));
+  const alpha = Math.min(enter, exit);
+
+  // Tagline above the doge
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = '500 26px Inter, system-ui';
+  ctx.fillStyle = "rgba(201,163,74,0.9)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("JOIN THE PACK", W / 2, 200);
+  ctx.font = '700 88px Fraunces, Georgia, serif';
+  ctx.fillStyle = CREAM;
+  ctx.fillText("fDOGE is on the move.", W / 2, 280);
+  ctx.restore();
+
+  if (!doge) {
+    // Fallback: if sprite failed to load, show a placeholder so the
+    // scene isn't empty.
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.6;
+    ctx.fillStyle = GOLD;
+    ctx.textAlign = "center";
+    ctx.font = '700 80px Fraunces, Georgia, serif';
+    ctx.fillText("🐕", W / 2, H / 2 + 100);
+    ctx.restore();
+    return;
+  }
+
+  // Horizontal travel: enters from right, exits to left. Over the
+  // full scene moves ~2x the canvas width so off-screen on both ends.
+  const travel = W + 900;
+  const x = W + 300 - travel * easeInOutCubic(p);
+
+  // Vertical bounce: 4 hops across the scene. Each hop is half of a
+  // sine period, mapped so the peaks are in the upper half of the arc.
+  const hops     = 4;
+  const hopPhase = (p * hops) % 1;
+  const bounce   = Math.abs(Math.sin(hopPhase * Math.PI)); // 0..1..0 per hop
+  const groundY  = H / 2 + 160;
+  const arcH     = 140;
+  const y        = groundY - bounce * arcH;
+
+  // Tilt: lean forward on takeoff, backward on landing
+  const tiltPhase = Math.cos(hopPhase * Math.PI * 2); // -1..1..-1
+  const tilt = tiltPhase * 0.12; // radians (~7 degrees)
+
+  // Scale: tiny squash on ground contact
+  const squash = 1 - (1 - bounce) * 0.06;
+
+  // Aspect-preserve render: fit into a 360px tall box
+  const targetH = 360;
+  const scale   = (targetH / doge.height) * squash;
+  const drawW   = doge.width  * scale;
+  const drawH   = doge.height * scale;
+
+  // Shadow beneath — bigger when on the ground, smaller at apex
+  ctx.save();
+  ctx.globalAlpha = alpha * (0.45 * (1 - bounce * 0.8));
+  ctx.fillStyle = "rgba(0,0,0,0.9)";
+  const shadowW = drawW * 0.85 * (1 - bounce * 0.25);
+  const shadowH = 24 * (1 - bounce * 0.25);
+  ctx.beginPath();
+  ctx.ellipse(x, groundY + drawH * 0.48, shadowW / 2, shadowH / 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Draw doge with tilt + scale around its own centre
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  ctx.rotate(tilt);
+  ctx.drawImage(doge, -drawW / 2, -drawH / 2, drawW, drawH);
+  ctx.restore();
+
+  // Dust puffs at ground contact (when bounce is near 0)
+  const ground = bounce < 0.08;
+  if (ground) {
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.4 * (1 - bounce / 0.08);
+    ctx.fillStyle = "rgba(245,236,208,0.6)";
+    for (let i = 0; i < 3; i++) {
+      const off = (i + 1) * 36;
+      ctx.beginPath();
+      ctx.arc(x + off + Math.random() * 6, groundY + drawH * 0.44 - Math.random() * 10,
+              14 + Math.random() * 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
 function sceneOutro(ctx: CanvasRenderingContext2D, t: number, len: number) {
   void len;
   const enter = Math.min(1, t / 0.5);
@@ -515,14 +635,15 @@ function scheduleMusic(ctx: AudioContext, ...dests: AudioNode[]) {
   const pad = ctx.createGain();
   pad.gain.setValueAtTime(0, t0);
   pad.gain.linearRampToValueAtTime(0.22, t0 + 1.5);
-  pad.gain.linearRampToValueAtTime(0.18, t0 + 14);
-  pad.gain.linearRampToValueAtTime(0.05, t0 + 17);
+  pad.gain.linearRampToValueAtTime(0.18, t0 + 13);
+  pad.gain.linearRampToValueAtTime(0.08, t0 + 16);
+  pad.gain.linearRampToValueAtTime(0.12, t0 + 19);
   pad.gain.linearRampToValueAtTime(0,    t0 + DURATION);
   pad.connect(master);
   const padFilter = ctx.createBiquadFilter();
   padFilter.type = "lowpass";
   padFilter.frequency.setValueAtTime(800, t0);
-  padFilter.frequency.linearRampToValueAtTime(1800, t0 + 14);
+  padFilter.frequency.linearRampToValueAtTime(1800, t0 + 13);
   padFilter.frequency.linearRampToValueAtTime(400,  t0 + DURATION);
   padFilter.Q.value = 1.2;
   padFilter.connect(pad);
@@ -538,7 +659,8 @@ function scheduleMusic(ctx: AudioContext, ...dests: AudioNode[]) {
   });
 
   // ---------- Boom at scene transitions ----------
-  const bigBoomTimes = [0, 2, 4.5, 7, 10, 14, 17];
+  // Updated to match the new 22s timeline.
+  const bigBoomTimes = [0, 2, 4.5, 7, 10, 13, 16, 19];
   bigBoomTimes.forEach((bt) => {
     const osc = ctx.createOscillator();
     osc.type = "sine";
@@ -590,44 +712,83 @@ function scheduleMusic(ctx: AudioContext, ...dests: AudioNode[]) {
     osc.stop(t0 + s + 0.4);
   });
 
-  // ---------- Rising tension 14–17s — slow upward glide ----------
+  // ---------- Rising tension 13–16s — slow upward glide under counter ----------
   const rise = ctx.createOscillator();
   rise.type = "sawtooth";
-  rise.frequency.setValueAtTime(110, t0 + 14);
-  rise.frequency.exponentialRampToValueAtTime(440, t0 + 17);
+  rise.frequency.setValueAtTime(110, t0 + 13);
+  rise.frequency.exponentialRampToValueAtTime(440, t0 + 16);
   const riseG = ctx.createGain();
-  riseG.gain.setValueAtTime(0, t0 + 14);
-  riseG.gain.linearRampToValueAtTime(0.12, t0 + 14.3);
-  riseG.gain.linearRampToValueAtTime(0.22, t0 + 16.9);
-  riseG.gain.exponentialRampToValueAtTime(0.001, t0 + 17.2);
+  riseG.gain.setValueAtTime(0, t0 + 13);
+  riseG.gain.linearRampToValueAtTime(0.12, t0 + 13.3);
+  riseG.gain.linearRampToValueAtTime(0.22, t0 + 15.9);
+  riseG.gain.exponentialRampToValueAtTime(0.001, t0 + 16.2);
   const riseF = ctx.createBiquadFilter();
   riseF.type = "bandpass"; riseF.frequency.value = 1200; riseF.Q.value = 2;
   rise.connect(riseF); riseF.connect(riseG); riseG.connect(master);
-  rise.start(t0 + 14);
-  rise.stop(t0 + 17.3);
+  rise.start(t0 + 13);
+  rise.stop(t0 + 16.3);
 
-  // ---------- Final impact + long tail ----------
+  // ---------- Doge run 16–19s — 4 stepping hits synced to hops ----------
+  // Four hops across 3s → one every 0.75s. Short filtered noise bursts
+  // approximate a paw-step sound.
+  for (let i = 0; i < 4; i++) {
+    const stepAt = t0 + 16 + i * 0.75;
+    // Noise source via buffer
+    const len = 0.15;
+    const sr  = ctx.sampleRate;
+    const buf = ctx.createBuffer(1, Math.floor(sr * len), sr);
+    const data = buf.getChannelData(0);
+    for (let j = 0; j < data.length; j++) {
+      // Decaying noise
+      data[j] = (Math.random() * 2 - 1) * Math.pow(1 - j / data.length, 2);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const stepF = ctx.createBiquadFilter();
+    stepF.type = "bandpass";
+    stepF.frequency.value = 600;
+    stepF.Q.value = 0.8;
+    const stepG = ctx.createGain();
+    stepG.gain.value = 0.22;
+    src.connect(stepF); stepF.connect(stepG); stepG.connect(master);
+    src.start(stepAt);
+
+    // Tiny body-thump sine under each step
+    const thump = ctx.createOscillator();
+    thump.type = "sine";
+    thump.frequency.setValueAtTime(120, stepAt);
+    thump.frequency.exponentialRampToValueAtTime(60, stepAt + 0.12);
+    const thumpG = ctx.createGain();
+    thumpG.gain.setValueAtTime(0, stepAt);
+    thumpG.gain.linearRampToValueAtTime(0.25, stepAt + 0.005);
+    thumpG.gain.exponentialRampToValueAtTime(0.001, stepAt + 0.18);
+    thump.connect(thumpG); thumpG.connect(master);
+    thump.start(stepAt);
+    thump.stop(stepAt + 0.2);
+  }
+
+  // ---------- Final impact + long tail for outro (19–22s) ----------
   const impact = ctx.createOscillator();
   impact.type = "sine";
-  impact.frequency.setValueAtTime(55, t0 + 17);
-  impact.frequency.exponentialRampToValueAtTime(30, t0 + 19.8);
+  impact.frequency.setValueAtTime(55, t0 + 19);
+  impact.frequency.exponentialRampToValueAtTime(30, t0 + 21.8);
   const impactG = ctx.createGain();
-  impactG.gain.setValueAtTime(0, t0 + 17);
-  impactG.gain.linearRampToValueAtTime(0.6, t0 + 17.02);
+  impactG.gain.setValueAtTime(0, t0 + 19);
+  impactG.gain.linearRampToValueAtTime(0.6, t0 + 19.02);
   impactG.gain.exponentialRampToValueAtTime(0.001, t0 + DURATION);
   impact.connect(impactG); impactG.connect(master);
-  impact.start(t0 + 17);
+  impact.start(t0 + 19);
   impact.stop(t0 + DURATION + 0.1);
 
-  // A high shimmer tail for the outro
+  // High shimmer tail for the outro
   const shimmer = ctx.createOscillator();
   shimmer.type = "sine";
   shimmer.frequency.value = 880; // A5
   const shimmerG = ctx.createGain();
-  shimmerG.gain.setValueAtTime(0, t0 + 17);
-  shimmerG.gain.linearRampToValueAtTime(0.07, t0 + 17.5);
+  shimmerG.gain.setValueAtTime(0, t0 + 19);
+  shimmerG.gain.linearRampToValueAtTime(0.07, t0 + 19.5);
   shimmerG.gain.exponentialRampToValueAtTime(0.001, t0 + DURATION);
   shimmer.connect(shimmerG); shimmerG.connect(master);
-  shimmer.start(t0 + 17);
+  shimmer.start(t0 + 19);
   shimmer.stop(t0 + DURATION + 0.1);
 }
