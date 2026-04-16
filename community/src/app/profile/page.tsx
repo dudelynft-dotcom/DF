@@ -299,15 +299,25 @@ function TierProgressRing({
   const start   = TIER_THRESHOLDS[tier];
   const end     = next ? TIER_THRESHOLDS[next] : start;
   // Max tier → ring full; otherwise interpolate between thresholds.
-  const progress = next
+  const target = next
     ? Math.max(0, Math.min(1, (points - start) / (end - start)))
     : 1;
 
-  const stroke  = 4;
-  const r       = (size - stroke) / 2;
-  const c       = 2 * Math.PI * r;
-  const dash    = `${progress * c} ${c}`;
-  const color   = TIER_COLOR[tier];
+  const stroke = 4;
+  const r      = (size - stroke) / 2;
+  const c      = 2 * Math.PI * r;
+  const color  = TIER_COLOR[tier];
+
+  // Entry animation — start at 0, then tick up to target on mount.
+  // Using rAF ensures the first paint captures the "empty" state so
+  // the CSS transition has something to animate from.
+  const [animated, setAnimated] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    raf = requestAnimationFrame(() => setAnimated(target));
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
+  const dash = `${animated * c} ${c}`;
 
   return (
     <div className="relative" style={{ width: size, height: size }}>
@@ -315,11 +325,24 @@ function TierProgressRing({
         {/* Track */}
         <circle cx={size / 2} cy={size / 2} r={r}
                 fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={stroke} />
-        {/* Progress */}
+        {/* Progress — animated stroke dash */}
         <circle cx={size / 2} cy={size / 2} r={r}
                 fill="none" stroke={color} strokeWidth={stroke}
                 strokeDasharray={dash} strokeLinecap="round"
-                style={{ transition: "stroke-dasharray 700ms ease" }} />
+                style={{
+                  transition: "stroke-dasharray 900ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+                  filter: tier === "diamond" ? `drop-shadow(0 0 6px ${color})` : undefined,
+                }} />
+        {/* Diamond shimmer — second stroke that orbits the ring */}
+        {tier === "diamond" && (
+          <circle cx={size / 2} cy={size / 2} r={r}
+                  fill="none" stroke={color} strokeWidth={stroke}
+                  strokeDasharray={`${c * 0.1} ${c * 0.9}`}
+                  strokeLinecap="round"
+                  opacity="0.6"
+                  className="[animation:tier_shimmer_3s_linear_infinite]"
+                  style={{ transformOrigin: "50% 50%" }} />
+        )}
       </svg>
       {/* Avatar centred */}
       <div className="absolute inset-0 flex items-center justify-center">
@@ -333,6 +356,13 @@ function TierProgressRing({
       >
         {tier}
       </div>
+      {/* keyframes — scoped to this component */}
+      <style jsx>{`
+        @keyframes tier_shimmer {
+          from { stroke-dashoffset: 0;     }
+          to   { stroke-dashoffset: -${c}; }
+        }
+      `}</style>
     </div>
   );
 }
