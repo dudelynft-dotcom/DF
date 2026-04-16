@@ -1,7 +1,7 @@
 "use client";
 import { useAccount, useDisconnect, useConfig, useReadContract } from "wagmi";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useEffect, useRef, useState } from "react";
-import { WalletModal } from "./WalletModal";
 import { tempo, addresses } from "@/config/chain";
 import { namesAbi } from "@/lib/namesAbi";
 import { useToast } from "./Toaster";
@@ -12,8 +12,10 @@ export function ConnectButton() {
   const { disconnect } = useDisconnect();
   const config = useConfig();
   const toast = useToast();
+  // RainbowKit wallet selection modal. Handles MetaMask / Coinbase /
+  // Rabby / WalletConnect QR + mobile deep-link in one call.
+  const { openConnectModal } = useConnectModal();
 
-  const [modalOpen, setModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -56,15 +58,13 @@ export function ConnectButton() {
 
   if (!isConnected) {
     return (
-      <div className="relative">
-        <button
-          onClick={() => setModalOpen((v) => !v)}
-          className="px-4 py-2 rounded-md bg-gold-400 text-bg-base text-sm font-medium hover:bg-gold-300 transition-colors"
-        >
-          Connect wallet
-        </button>
-        <WalletModal open={modalOpen} onClose={() => setModalOpen(false)} />
-      </div>
+      <button
+        onClick={() => openConnectModal?.()}
+        disabled={!openConnectModal}
+        className="px-4 py-2 rounded-md bg-gold-400 text-bg-base text-sm font-medium hover:bg-gold-300 transition-colors disabled:opacity-60"
+      >
+        Connect wallet
+      </button>
     );
   }
 

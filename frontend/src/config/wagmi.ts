@@ -1,26 +1,42 @@
 import { createConfig, http } from "wagmi";
-import { injected, walletConnect, coinbaseWallet } from "wagmi/connectors";
+import { connectorsForWallets } from "@rainbow-me/rainbowkit";
+import {
+  metaMaskWallet,
+  coinbaseWallet,
+  rabbyWallet,
+  injectedWallet,
+  walletConnectWallet,
+} from "@rainbow-me/rainbowkit/wallets";
 import { arc } from "./chain";
 
-const wcProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
-const appMeta = {
-  name: "DOGE FORGE",
-  description: "Mine fDOGE on Arc",
-  url: typeof window !== "undefined" ? window.location.origin : "https://dogeforge.fun",
-  icons: [] as string[],
-};
+// Main-site wallet lineup, powered by RainbowKit. Unlike the community
+// app we KEEP WalletConnect here — trading is the primary flow and we
+// can't afford to lose mobile Safari/Chrome users. WC is free up to
+// 100 MAW on the project ID we provision in Vercel env; add paid tier
+// when we cross that.
+//
+// Set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID at build time. RainbowKit
+// still renders the rest of the wallets if the id is missing, but the
+// WC deep-link stops working.
+const wcProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "";
 
-// Build connector list:
-//  - EIP-6963 injected discovery (MetaMask, Rabby, any browser extension)
-//  - WalletConnect v2 (QR / mobile deep-link). Only when projectId is set.
-//  - Coinbase Wallet (native SDK; works on desktop + mobile)
-const connectors = [
-  injected({ shimDisconnect: true }),
-  coinbaseWallet({ appName: appMeta.name, appLogoUrl: "" }),
-  ...(wcProjectId
-    ? [walletConnect({ projectId: wcProjectId, metadata: appMeta, showQrModal: true })]
-    : []),
+const wallets = [
+  {
+    groupName: "Recommended",
+    wallets: [
+      metaMaskWallet,
+      coinbaseWallet,
+      rabbyWallet,
+      walletConnectWallet,
+      injectedWallet,
+    ],
+  },
 ];
+
+const connectors = connectorsForWallets(wallets, {
+  appName: "DOGE FORGE",
+  projectId: wcProjectId || "DOGE_FORGE_NO_WC", // placeholder so RainbowKit doesn't throw
+});
 
 export const wagmiConfig = createConfig({
   chains: [arc],
