@@ -226,3 +226,12 @@ if (!cols.some((c) => c.name === "tg_user_id")) {
 if (!cols.some((c) => c.name === "tg_username")) {
   db.exec(`ALTER TABLE community_users ADD COLUMN tg_username TEXT`);
 }
+// Banned users: `banned` (0/1) + reason + timestamp. Ban is soft —
+// we don't DELETE rows because ledger entries FK back to them; we
+// negate their point total via a ledger entry + set banned=1 so
+// the UI greys them out and /claim bounces with "banned".
+if (!cols.some((c) => c.name === "banned")) {
+  db.exec(`ALTER TABLE community_users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0`);
+  db.exec(`ALTER TABLE community_users ADD COLUMN banned_at INTEGER`);
+  db.exec(`ALTER TABLE community_users ADD COLUMN banned_reason TEXT`);
+}

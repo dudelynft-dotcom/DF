@@ -359,10 +359,11 @@ community.post("/claim", async (req, res) => {
   }
 
   const user = db.prepare(
-    `SELECT id, x_id, x_handle, wallet FROM community_users WHERE x_id = ? AND wallet = ?`
+    `SELECT id, x_id, x_handle, wallet, banned FROM community_users WHERE x_id = ? AND wallet = ?`
   ).get(xId, wallet.toLowerCase()) as
-    { id: number; x_id: string; x_handle: string; wallet: string } | undefined;
+    { id: number; x_id: string; x_handle: string; wallet: string; banned: number } | undefined;
   if (!user) return res.status(404).json({ error: "user_not_bound" });
+  if (user.banned) return res.status(403).json({ error: "banned" });
 
   const task = db.prepare(
     `SELECT id, slug, kind, points, max_completions, payload
@@ -518,6 +519,241 @@ community.post("/admin/task-active", (req, res) => {
   if (!Number.isInteger(taskId)) return res.status(400).json({ error: "bad_task_id" });
   db.prepare(`UPDATE community_task_defs SET active = ? WHERE id = ?`).run(active ? 1 : 0, taskId);
   res.json({ ok: true });
+});
+
+// ============================================================
+//                      MODERATION ENDPOINTS
+// ============================================================
+
+/// GET /community/admin/user/:id/ledger
+/// Full point-history for one user. Newest first.
+community.get("/admin/user/:id/ledger", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const userId = Number(req.params.id);
+  if (!Number.isInteger(userId)) return res.status(400).json({ error: "bad_id" });
+
+  const user = db.prepare(
+    `SELECT id, x_handle, wallet, banned, banned_at, banned_reason
+     FROM community_users WHERE id = ?`
+  ).get(userId) as { id: number; x_handle: string; wallet: string; banned: number; banned_at: number | null; banned_reason: string | null } | undefined;
+  if (!user) return res.status(404).json({ error: "user_not_found" });
+
+  const entries = db.prepare(
+    `SELECT l.id, l.delta, l.reason, l.ref_id, l.created_at,
+            t.slug AS task_slug, t.title AS task_title
+     FROM community_points_ledger l
+     LEFT JOIN community_completions c ON c.id = l.ref_id AND l.reason = 'task'
+     LEFT JOIN community_task_defs t    ON t.id = c.task_id
+     WHERE l.user_id = ?
+     ORDER BY l.created_at DESC, l.id DESC
+     LIMIT 500`
+  ).all(userId);
+
+  const total = db.prepare(
+    `SELECT COALESCE(SUM(delta), 0) AS total FROM community_points_ledger WHERE user_id = ?`
+  ).get(userId) as { total: number };
+
+  res.json({ user, total: total.total, entries });
+});
+
+/// POST /community/admin/ban   { userId, reason }
+/// POST /community/admin/unban { userId }
+/// Ban is soft: sets banned=1 and appends a negative ledger entry
+/// zero'ing the point total. Wallet and X remain bound so the user
+/// can't simply re-register the same pair. Unban reverses both.
+community.post("/admin/ban", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { userId, reason } = req.body as { userId: number; reason: string };
+  if (!Number.isInteger(userId))               return res.status(400).json({ error: "bad_id" });
+  if (typeof reason !== "string" || !reason)   return res.status(400).json({ error: "missing_reason" });
+
+  const user = db.prepare(
+    `SELECT id, banned FROM community_users WHERE id = ?`
+  ).get(userId) as { id: number; banned: number } | undefined;
+  if (!user) return res.status(404).json({ error: "user_not_found" });
+  if (user.banned) return res.status(409).json({ error: "already_banned" });
+
+  const total = db.prepare(
+    `SELECT COALESCE(SUM(delta), 0) AS total FROM community_points_ledger WHERE user_id = ?`
+  ).get(userId) as { total: number };
+
+  const now = Math.floor(Date.now() / 1000);
+  db.transaction(() => {
+    if (total.total > 0) {
+      db.prepare(
+        `INSERT INTO community_points_ledger (user_id, delta, reason, ref_id, created_at)
+         VALUES (?, ?, ?, NULL, ?)`
+      ).run(userId, -total.total, `admin:ban:${reason}`.slice(0, 200), now);
+    }
+    db.prepare(
+      `UPDATE community_users SET banned = 1, banned_at = ?, banned_reason = ? WHERE id = ?`
+    ).run(now, reason, userId);
+  })();
+
+  res.json({ ok: true, pointsRemoved: total.total });
+});
+
+community.post("/admin/unban", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { userId } = req.body as { userId: number };
+  if (!Number.isInteger(userId)) return res.status(400).json({ error: "bad_id" });
+  db.prepare(
+    `UPDATE community_users SET banned = 0, banned_at = NULL, banned_reason = NULL WHERE id = ?`
+  ).run(userId);
+  res.json({ ok: true });
+});
+
+/// GET /community/admin/tweets?status=verified|rejected|all&limit=200
+/// Daily tweet submissions for audit.
+community.get("/admin/tweets", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const status = String(req.query.status ?? "all");
+  const limit  = Math.min(500, Math.max(1, Number(req.query.limit ?? 200)));
+
+  const where = status === "all" ? "1=1" : "t.status = ?";
+  const params: unknown[] = status === "all" ? [] : [status];
+
+  const rows = db.prepare(
+    `SELECT t.id, t.user_id, t.tweet_id, t.url, t.day, t.status, t.reason, t.checked_at,
+            u.x_handle, u.wallet, u.banned
+     FROM community_daily_tweets t
+     JOIN community_users u ON u.id = t.user_id
+     WHERE ${where}
+     ORDER BY t.checked_at DESC, t.id DESC
+     LIMIT ?`
+  ).all(...params, limit);
+  res.json({ tweets: rows });
+});
+
+/// POST /community/admin/tweet-reject { tweetId, reason }
+/// Mark a submitted tweet as rejected AND revoke the points that
+/// were awarded for it (look up the paired completion + ledger entry).
+community.post("/admin/tweet-reject", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { tweetId, reason } = req.body as { tweetId: number; reason: string };
+  if (!Number.isInteger(tweetId))              return res.status(400).json({ error: "bad_id" });
+  if (typeof reason !== "string" || !reason)   return res.status(400).json({ error: "missing_reason" });
+
+  const tw = db.prepare(
+    `SELECT id, user_id, tweet_id, status FROM community_daily_tweets WHERE id = ?`
+  ).get(tweetId) as { id: number; user_id: number; tweet_id: string; status: string } | undefined;
+  if (!tw) return res.status(404).json({ error: "tweet_not_found" });
+  if (tw.status === "rejected") return res.status(409).json({ error: "already_rejected" });
+
+  const now = Math.floor(Date.now() / 1000);
+  // Find the completion row for daily-tweet keyed to this tweet id.
+  // Proof is JSON { tweetId: "..." } set by the verifier.
+  const completion = db.prepare(
+    `SELECT id, points_awarded FROM community_completions
+     WHERE user_id = ? AND json_extract(proof, '$.tweetId') = ?
+     ORDER BY completed_at DESC LIMIT 1`
+  ).get(tw.user_id, tw.tweet_id) as { id: number; points_awarded: number } | undefined;
+
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE community_daily_tweets SET status = 'rejected', reason = ?, checked_at = ? WHERE id = ?`
+    ).run(reason, now, tweetId);
+    if (completion) {
+      // Reverse the award. Keep completion row for audit trail.
+      db.prepare(
+        `INSERT INTO community_points_ledger (user_id, delta, reason, ref_id, created_at)
+         VALUES (?, ?, ?, ?, ?)`
+      ).run(tw.user_id, -completion.points_awarded, `admin:tweet-reject:${reason}`.slice(0, 200), completion.id, now);
+    }
+  })();
+
+  res.json({ ok: true, reversed: completion?.points_awarded ?? 0 });
+});
+
+/// POST /community/admin/bulk-award
+/// Body: { wallets: ["0x...", ...], delta: number, reason: string }
+/// Appends +delta to every matching user. Missing wallets are skipped.
+community.post("/admin/bulk-award", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const { wallets, delta, reason } = req.body as { wallets: string[]; delta: number; reason: string };
+  if (!Array.isArray(wallets) || wallets.length === 0)  return res.status(400).json({ error: "bad_wallets" });
+  if (wallets.length > 2000)                             return res.status(400).json({ error: "too_many" });
+  if (!Number.isInteger(delta) || delta === 0)           return res.status(400).json({ error: "bad_delta" });
+  if (typeof reason !== "string" || !reason)             return res.status(400).json({ error: "missing_reason" });
+
+  const now = Math.floor(Date.now() / 1000);
+  const find = db.prepare(`SELECT id FROM community_users WHERE wallet = ?`);
+  const insert = db.prepare(
+    `INSERT INTO community_points_ledger (user_id, delta, reason, ref_id, created_at)
+     VALUES (?, ?, ?, NULL, ?)`
+  );
+  let matched = 0, skipped = 0;
+  db.transaction(() => {
+    for (const w of wallets) {
+      const row = find.get(String(w).toLowerCase()) as { id: number } | undefined;
+      if (!row) { skipped++; continue; }
+      insert.run(row.id, delta, `admin:bulk:${reason}`.slice(0, 200), now);
+      matched++;
+    }
+  })();
+  res.json({ ok: true, matched, skipped });
+});
+
+/// GET /community/admin/referrals
+/// Aggregates: per referrer, count of referees + total points earned
+/// by those referees. Lets the admin spot sybil clusters at a glance.
+community.get("/admin/referrals", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const rows = db.prepare(
+    `SELECT r.referrer_id,
+            u.x_handle AS referrer_handle,
+            COUNT(r.referee_id) AS referee_count,
+            COALESCE(SUM(rl.total), 0) AS referee_total_points
+     FROM community_referrals r
+     JOIN community_users u ON u.id = r.referrer_id
+     LEFT JOIN (
+       SELECT user_id, SUM(delta) AS total
+       FROM community_points_ledger GROUP BY user_id
+     ) rl ON rl.user_id = r.referee_id
+     GROUP BY r.referrer_id
+     ORDER BY referee_count DESC, referee_total_points DESC
+     LIMIT 500`
+  ).all();
+  res.json({ referrers: rows });
+});
+
+/// GET /community/admin/export.csv
+/// Streams the full user + points snapshot as CSV. Columns:
+/// id, x_id, x_handle, wallet, tier, points, trade_usd, mine_usd,
+/// referrer_id, tg_username, banned, created_at
+community.get("/admin/export.csv", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const users = db.prepare(
+    `SELECT u.id, u.x_id, u.x_handle, u.wallet, u.tier, u.referrer_id,
+            u.tg_username, u.banned, u.created_at,
+            COALESCE(p.total, 0) AS points
+     FROM community_users u
+     LEFT JOIN (
+       SELECT user_id, SUM(delta) AS total FROM community_points_ledger GROUP BY user_id
+     ) p ON p.user_id = u.id
+     ORDER BY points DESC, u.created_at ASC`
+  ).all() as Array<{
+    id: number; x_id: string; x_handle: string; wallet: string; tier: string;
+    referrer_id: number | null; tg_username: string | null; banned: number;
+    created_at: number; points: number;
+  }>;
+
+  const esc = (v: unknown) => {
+    if (v == null) return "";
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const header = "id,x_id,x_handle,wallet,tier,points,trade_usd,mine_usd,referrer_id,tg_username,banned,created_at";
+  const lines = users.map((u) => [
+    u.id, u.x_id, u.x_handle, u.wallet, u.tier, u.points,
+    getTradeVolumeUsd(u.wallet), getMineVolumeUsd(u.wallet),
+    u.referrer_id ?? "", u.tg_username ?? "", u.banned, u.created_at,
+  ].map(esc).join(","));
+  const csv = [header, ...lines].join("\n") + "\n";
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename=community-snapshot-${new Date().toISOString().slice(0,10)}.csv`);
+  res.send(csv);
 });
 
 function safeJson(s: string): unknown {
