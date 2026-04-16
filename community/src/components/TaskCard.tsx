@@ -147,6 +147,33 @@ export function TaskCard({
             >
               Start →
             </Link>
+          ) : (task.payload as { url?: string })?.url ? (
+            // Generic social task with an action URL (follow link, tweet
+            // to retweet, etc.). Show "Open ↗" to go do the thing, then
+            // "Claim" on return.
+            <div className="flex items-center gap-2">
+              <a
+                href={(task.payload as { url: string }).url}
+                target="_blank" rel="noreferrer"
+                className="
+                  px-3 py-2 rounded-md text-sm font-medium transition-colors
+                  border border-line text-ink hover:border-gold-400/60 hover:bg-white/5
+                "
+              >
+                Open ↗
+              </a>
+              <button
+                onClick={onClaim}
+                disabled={busy || disabled}
+                className="
+                  px-4 py-2 rounded-md text-sm font-medium transition-colors
+                  bg-gold-400 text-bg-base hover:bg-gold-300
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                "
+              >
+                {busy ? (<span className="inline-flex items-center gap-1.5"><Spinner /> Verifying</span>) : "Claim"}
+              </button>
+            </div>
           ) : task.slug === "daily-tweet" ? (
             // Tweet URL form — wider so it gets its own row on mobile.
             <div className="hidden sm:flex items-center gap-2">

@@ -171,7 +171,7 @@ const seedTask = db.prepare(`
 `);
 const SEED = [
   // --- Social (one-time) ---
-  { slug: "follow-x",        kind: "social", title: "Follow @DogeForgefun on X", description: "Follow the official DOGE FORGE account.", points: 100, max: 1, payload: '{"handle":"DogeForgefun"}', sort: 10 },
+  { slug: "follow-x",        kind: "social", title: "Follow @DogeForgefun on X", description: "Follow the official DOGE FORGE account.", points: 100, max: 1, payload: '{"handle":"DogeForgefun","url":"https://x.com/DogeForgefun"}', sort: 10 },
   { slug: "retweet-launch",  kind: "social", title: "Retweet the launch post",     description: "Retweet our pinned launch announcement.", points: 75,  max: 1, payload: '{}',                        sort: 12 },
   { slug: "join-tg-channel", kind: "social", title: "Join the official Telegram channel", description: "Announcements channel. Link your Telegram first; we verify membership on-chain via bot.", points: 100, max: 1, payload: '{"chat":"@DogeForgeAnn","url":"https://t.me/DogeForgeAnn"}', sort: 13 },
   { slug: "join-tg-group",   kind: "social", title: "Join the Telegram community",        description: "Community chat. Link Telegram first; verified via bot, no self-attest.",                points: 75,  max: 1, payload: '{"chat":"@dogeforge","url":"https://t.me/dogeforge"}',    sort: 14 },
@@ -215,6 +215,14 @@ db.prepare(`UPDATE community_task_defs SET description = 'Commit $100 testnet US
 db.prepare(`UPDATE community_task_defs SET description = 'Commit $500 testnet USDC to the miner.' WHERE slug = 'mine-500'`).run();
 db.prepare(`UPDATE community_task_defs SET description = 'Commit $1,000 testnet USDC to the miner.' WHERE slug = 'mine-1000'`).run();
 db.prepare(`UPDATE community_task_defs SET description = 'Commit $5,000 testnet USDC to the miner.' WHERE slug = 'mine-5000'`).run();
+
+// Ensure follow-x has a clickable URL so the "Open ↗" button renders
+// on the task card. Leaves admin-edited payloads alone.
+db.prepare(
+  `UPDATE community_task_defs
+     SET payload = '{"handle":"DogeForgefun","url":"https://x.com/DogeForgefun"}'
+   WHERE slug = 'follow-x' AND json_extract(payload, '$.url') IS NULL`
+).run();
 
 // Add tg_user_id / tg_username columns. SQLite has no
 // ALTER IF NOT EXISTS — introspect PRAGMA first.
