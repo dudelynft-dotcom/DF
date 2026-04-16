@@ -75,7 +75,7 @@ export default function Profile() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-14">
       {/* Hero card */}
       <div className="rounded-2xl border border-line bg-bg-surface/60 overflow-hidden">
-        <div className="bg-hero-glow p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+        <div className="bg-hero-glow p-4 sm:p-6 lg:p-8 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
           <div className="relative shrink-0">
             {me.xAvatar ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -106,7 +106,7 @@ export default function Profile() {
 
           <div className="sm:ml-auto text-right shrink-0">
             <div className="text-[11px] uppercase tracking-[0.25em] text-gold-400/90">Points</div>
-            <div className="font-display text-4xl tabular text-ink mt-1">
+            <div className="font-display text-3xl sm:text-4xl tabular text-ink mt-1">
               {(stats?.points ?? 0).toLocaleString()}
             </div>
             <div className="text-[11px] text-ink-faint">
@@ -202,11 +202,11 @@ function ReferralCard({ handle, count }: { handle: string; count: number }) {
     `Mining $FDOGE on @DogeForgefun — Season 1 points are live. Connect via my link, you get a head start, I get 10%.\n\n${link}`
   );
   return (
-    <div className="mt-4 rounded-xl border border-line bg-bg-surface/60 p-5">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <div className="flex-1 min-w-0">
+    <div className="mt-4 rounded-xl border border-line bg-bg-surface/60 p-4 sm:p-5">
+      <div className="flex flex-col gap-4">
+        <div className="flex-1 min-w-0 overflow-hidden">
           <div className="text-[11px] uppercase tracking-[0.25em] text-ink-faint">Your link</div>
-          <div className="mt-2 font-mono text-sm text-ink truncate">{link}</div>
+          <div className="mt-2 font-mono text-xs sm:text-sm text-ink truncate">{link}</div>
           <div className="mt-2 text-xs text-ink-muted">
             <span className="text-gold-300 font-medium">10%</span> of every referee&apos;s points,
             credited to you on every claim. {count} signed up so far.

@@ -61,7 +61,7 @@ export default function Leaderboard() {
       <div className="flex items-end justify-between flex-wrap gap-4">
         <div>
           <p className="text-[11px] uppercase tracking-[0.3em] text-gold-400/90">Season 1</p>
-          <h1 className="mt-2 font-display text-3xl sm:text-4xl tracking-tight">Leaderboard</h1>
+          <h1 className="mt-2 font-display text-2xl sm:text-3xl lg:text-4xl tracking-tight">Leaderboard</h1>
         </div>
         <div className="flex items-center gap-1 rounded-md border border-line p-1 bg-bg-surface/40">
           {RANGES.map((r) => (
@@ -96,7 +96,7 @@ export default function Leaderboard() {
 
       {/* Table */}
       <div className="mt-4 rounded-xl border border-line bg-bg-surface/30 overflow-hidden">
-        <div className="grid grid-cols-[60px_1fr_auto] gap-3 sm:gap-6 px-4 sm:px-5 py-3 border-b border-line text-[10px] uppercase tracking-[0.25em] text-ink-faint">
+        <div className="grid grid-cols-[40px_1fr_auto] sm:grid-cols-[60px_1fr_auto] gap-2 sm:gap-6 px-3 sm:px-5 py-3 border-b border-line text-[10px] uppercase tracking-[0.25em] text-ink-faint">
           <div>Rank</div>
           <div>Account</div>
           <div className="text-right">Points</div>
@@ -120,7 +120,7 @@ export default function Leaderboard() {
 
       {/* Sticky 'you' bar — only when bound AND not in the visible top list */}
       {me && entries && !myRow && (
-        <div className="sticky bottom-3 mt-4 rounded-xl border border-gold-400/40 bg-bg-base/95 backdrop-blur shadow-2xl px-4 py-3 grid grid-cols-[60px_1fr_auto] gap-3 sm:gap-6 items-center">
+        <div className="sticky bottom-3 mt-4 rounded-xl border border-gold-400/40 bg-bg-base/95 backdrop-blur shadow-2xl px-3 sm:px-4 py-3 grid grid-cols-[40px_1fr_auto] sm:grid-cols-[60px_1fr_auto] gap-2 sm:gap-6 items-center">
           <div className="text-ink-faint text-xs">You</div>
           <div className="flex items-center gap-2 min-w-0">
             {me.xAvatar ? (
@@ -144,38 +144,38 @@ function Row({ entry, mine }: { entry: Entry; mine: boolean }) {
   return (
     <li
       className={`
-        grid grid-cols-[60px_1fr_auto] gap-3 sm:gap-6 px-4 sm:px-5 py-3 items-center
+        grid grid-cols-[40px_1fr_auto] sm:grid-cols-[60px_1fr_auto] gap-2 sm:gap-6 px-3 sm:px-5 py-3 items-center
         border-b border-line/60 last:border-b-0
         ${mine ? "bg-gold-400/[0.06]" : ""}
       `}
     >
-      <div className={`font-display tabular text-lg ${rankClass} flex items-center gap-1`}>
-        {medal && <span aria-hidden className="text-base leading-none">{medal}</span>}
+      <div className={`font-display tabular text-base sm:text-lg ${rankClass} flex items-center gap-1`}>
+        {medal && <span aria-hidden className="text-sm sm:text-base leading-none">{medal}</span>}
         <span>{entry.rank}</span>
       </div>
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         {entry.xAvatar ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={entry.xAvatar} alt="" className="h-7 w-7 rounded-full" />
+          <img src={entry.xAvatar} alt="" className="h-6 w-6 sm:h-7 sm:w-7 rounded-full shrink-0" />
         ) : (
-          <div className="h-7 w-7 rounded-full bg-bg-surface" />
+          <div className="h-6 w-6 sm:h-7 sm:w-7 rounded-full bg-bg-surface shrink-0" />
         )}
         <div className="min-w-0">
-          <div className="text-ink truncate flex items-center gap-2">
+          <div className="text-ink truncate flex items-center gap-1 sm:gap-2 text-sm sm:text-base">
             <a
               href={`https://x.com/${entry.xHandle}`}
               target="_blank" rel="noreferrer"
-              className="hover:text-gold-300 transition-colors"
+              className="hover:text-gold-300 transition-colors truncate"
             >
               @{entry.xHandle}
             </a>
             <TierPill tier={entry.tier} />
             {mine && <span className="text-[10px] uppercase tracking-[0.2em] text-gold-400">you</span>}
           </div>
-          <div className="text-[11px] text-ink-faint font-mono">{entry.wallet}</div>
+          <div className="text-[10px] sm:text-[11px] text-ink-faint font-mono truncate">{entry.wallet}</div>
         </div>
       </div>
-      <div className="text-right font-display text-ink tabular text-base">
+      <div className="text-right font-display text-ink tabular text-sm sm:text-base">
         {entry.points.toLocaleString()}
       </div>
     </li>

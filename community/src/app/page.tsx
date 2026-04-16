@@ -37,7 +37,7 @@ export default function Home() {
           <p className="text-[11px] uppercase tracking-[0.3em] text-gold-400/90">
             Season 1 · Open now
           </p>
-          <h1 className="mt-5 font-display text-5xl sm:text-7xl tracking-tightest leading-[0.95]">
+          <h1 className="mt-5 font-display text-3xl sm:text-5xl lg:text-7xl tracking-tightest leading-[0.95]">
             Earn points.<br />
             <span className="text-gold-400">Shape the forge.</span>
           </h1>
@@ -83,10 +83,10 @@ export default function Home() {
       {/* How it works */}
       <section className="border-t border-line">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
-          <h2 className="font-display text-3xl sm:text-4xl tracking-tight">
+          <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl tracking-tight">
             How it works
           </h2>
-          <div className="mt-10 grid sm:grid-cols-3 gap-4">
+          <div className="mt-8 sm:mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Step n="01" title="Connect X"
               body="Sign in with X (OAuth 2.0). We read your handle, not your DMs. Account must be ≥ 30 days old." />
             <Step n="02" title="Bind wallet"
@@ -100,7 +100,7 @@ export default function Home() {
       {/* Task categories preview */}
       <section className="border-t border-line bg-bg-surface/30">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
-          <h2 className="font-display text-3xl sm:text-4xl tracking-tight">
+          <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl tracking-tight">
             Where points live
           </h2>
           <p className="mt-3 text-ink-muted max-w-xl">
@@ -108,7 +108,7 @@ export default function Home() {
             mining tiers auto-unlock as the on-chain indexer picks up
             your activity.
           </p>
-          <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="mt-8 sm:mt-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <Cat label="Social"   count="3"  hint="Follow, tweet, join TG" />
             <Cat label="Trade"    count="4"  hint="Volume milestones" />
             <Cat label="Mine"     count="4"  hint="Commitment milestones" />
@@ -126,7 +126,7 @@ export default function Home() {
       <section className="border-t border-line">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 grid lg:grid-cols-2 gap-10">
           <div>
-            <h2 className="font-display text-3xl tracking-tight">Fair by default</h2>
+            <h2 className="font-display text-2xl sm:text-3xl tracking-tight">Fair by default</h2>
             <p className="mt-4 text-ink-muted leading-relaxed">
               One X account per wallet. Minimum account age. Volume
               tracked on-chain via the same indexer that powers
@@ -135,7 +135,7 @@ export default function Home() {
             </p>
           </div>
           <div>
-            <h2 className="font-display text-3xl tracking-tight">On rewards</h2>
+            <h2 className="font-display text-2xl sm:text-3xl tracking-tight">On rewards</h2>
             <p className="mt-4 text-ink-muted leading-relaxed">
               We may launch <span className="text-ink">cDOGE</span> on
               mainnet as a community token — and Season 1 points would
@@ -150,7 +150,7 @@ export default function Home() {
       {/* Final CTA */}
       <section className="border-t border-line">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-20 text-center">
-          <h2 className="font-display text-4xl sm:text-5xl tracking-tightest">
+          <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl tracking-tightest">
             {me?.wallet ? "See you inside." : "Ready when you are."}
           </h2>
           <p className="mt-4 text-ink-muted">

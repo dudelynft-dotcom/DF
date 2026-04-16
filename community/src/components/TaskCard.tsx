@@ -95,7 +95,7 @@ export function TaskCard({
         ? "border-emerald-500/30 bg-emerald-500/[0.04]"
         : "border-line bg-bg-surface/40 hover:border-gold-400/40"}
     `}>
-      <div className="flex items-start gap-4">
+      <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-[10px] uppercase tracking-[0.2em] px-2 py-0.5 rounded-full border ${KIND_TONE[task.kind]}`}>
@@ -156,7 +156,7 @@ export function TaskCard({
                 onChange={(e) => setTweetUrl(e.target.value)}
                 placeholder="https://x.com/you/status/…"
                 className="
-                  w-64 px-3 py-2 rounded-md text-xs bg-bg-base
+                  w-48 lg:w-64 px-3 py-2 rounded-md text-xs bg-bg-base
                   border border-line text-ink placeholder:text-ink-faint
                   focus:outline-none focus:border-gold-400/60
                 "

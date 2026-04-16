@@ -86,7 +86,7 @@ export default function Quiz() {
       <div className="flex items-baseline justify-between flex-wrap gap-2">
         <div>
           <p className="text-[11px] uppercase tracking-[0.3em] text-gold-400/90">Whitepaper quiz</p>
-          <h1 className="mt-2 font-display text-3xl sm:text-4xl tracking-tight">5 questions, all-or-nothing</h1>
+          <h1 className="mt-2 font-display text-2xl sm:text-3xl lg:text-4xl tracking-tight">5 questions, all-or-nothing</h1>
         </div>
         <a
           href="https://dogeforge.fun/TDOGEPAPER"

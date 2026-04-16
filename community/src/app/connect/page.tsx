@@ -46,7 +46,7 @@ function ConnectBody() {
         <p className="text-[11px] uppercase tracking-[0.3em] text-gold-400/90 text-center">
           Get started
         </p>
-        <h1 className="mt-4 font-display text-4xl tracking-tight text-center">
+        <h1 className="mt-4 font-display text-2xl sm:text-4xl tracking-tight text-center">
           Two steps. Then you&apos;re in.
         </h1>
 

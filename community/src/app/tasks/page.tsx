@@ -82,7 +82,7 @@ export default function Tasks() {
     return (
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
         <div className="h-24 rounded-2xl bg-white/5 animate-pulse" />
-        <div className="mt-8 grid grid-cols-3 gap-4">
+        <div className="mt-8 grid sm:grid-cols-3 gap-4">
           <div className="h-32 rounded-xl bg-white/5 animate-pulse" />
           <div className="h-32 rounded-xl bg-white/5 animate-pulse" />
           <div className="h-32 rounded-xl bg-white/5 animate-pulse" />
@@ -177,7 +177,7 @@ function Stats({ me, totalTasks, doneTasks }: { me: NonNullable<Me>; totalTasks:
   const progressPct = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
   return (
     <div className="rounded-2xl border border-line bg-bg-surface/60 overflow-hidden">
-      <div className="bg-hero-glow p-5 sm:p-6 grid sm:grid-cols-[auto_1fr_auto] items-center gap-5">
+      <div className="bg-hero-glow p-4 sm:p-6 flex flex-col sm:grid sm:grid-cols-[auto_1fr_auto] items-start sm:items-center gap-4 sm:gap-5">
         {me.xAvatar ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={me.xAvatar} alt="" className="h-14 w-14 rounded-full border-2 border-gold-400" />
@@ -205,7 +205,7 @@ function Stats({ me, totalTasks, doneTasks }: { me: NonNullable<Me>; totalTasks:
 
         <div className="text-right">
           <div className="text-[11px] uppercase tracking-[0.25em] text-gold-400/90">Season 1</div>
-          <div className="font-display text-4xl sm:text-5xl tabular text-ink mt-1">
+          <div className="font-display text-3xl sm:text-5xl tabular text-ink mt-1">
             {me.points.toLocaleString()}
           </div>
           <div className="text-[11px] text-ink-faint">points</div>
