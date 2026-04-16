@@ -177,38 +177,47 @@ function Stats({ me, totalTasks, doneTasks }: { me: NonNullable<Me>; totalTasks:
   const progressPct = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
   return (
     <div className="rounded-2xl border border-line bg-bg-surface/60 overflow-hidden">
-      <div className="bg-hero-glow p-4 sm:p-6 flex flex-col sm:grid sm:grid-cols-[auto_1fr_auto] items-start sm:items-center gap-4 sm:gap-5">
-        {me.xAvatar ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={me.xAvatar} alt="" className="h-14 w-14 rounded-full border-2 border-gold-400" />
-        ) : (
-          <div className="h-14 w-14 rounded-full border-2 border-gold-400 bg-bg-base" />
-        )}
+      <div className="bg-hero-glow p-4 sm:p-6">
+        {/* Mobile: compact 2-col (avatar+info left, points right) */}
+        <div className="flex items-start gap-3 sm:gap-5">
+          {me.xAvatar ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={me.xAvatar} alt="" className="h-10 w-10 sm:h-14 sm:w-14 rounded-full border-2 border-gold-400 shrink-0" />
+          ) : (
+            <div className="h-10 w-10 sm:h-14 sm:w-14 rounded-full border-2 border-gold-400 bg-bg-base shrink-0" />
+          )}
 
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-display text-xl text-ink truncate">@{me.xHandle}</span>
-            <TierPill tier={me.tier} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-display text-base sm:text-xl text-ink truncate">@{me.xHandle}</span>
+              <TierPill tier={me.tier} />
+            </div>
+            <div className="mt-1 sm:mt-2 flex items-center gap-2 text-[11px] sm:text-xs text-ink-faint">
+              <span>{doneTasks}/{totalTasks} tasks</span>
+              <span className="opacity-60">·</span>
+              <span>{me.referrals} ref{me.referrals === 1 ? "" : "s"}</span>
+            </div>
           </div>
-          <div className="mt-2 flex items-center gap-2 text-xs text-ink-faint">
-            <span>{doneTasks}/{totalTasks} tasks complete</span>
-            <span className="opacity-60">·</span>
-            <span>{me.referrals} referral{me.referrals === 1 ? "" : "s"}</span>
-          </div>
-          <div className="mt-2 h-1.5 rounded-full bg-white/5 overflow-hidden max-w-md">
-            <div
-              className="h-full bg-gold-400 transition-[width] duration-500"
-              style={{ width: `${progressPct}%` }}
-            />
+
+          <div className="text-right shrink-0">
+            <div className="text-[9px] sm:text-[11px] uppercase tracking-[0.25em] text-gold-400/90">Season 1</div>
+            <div className="font-display text-2xl sm:text-4xl lg:text-5xl tabular text-ink">
+              {me.points.toLocaleString()}
+            </div>
+            <div className="text-[10px] sm:text-[11px] text-ink-faint">points</div>
           </div>
         </div>
 
-        <div className="text-right">
-          <div className="text-[11px] uppercase tracking-[0.25em] text-gold-400/90">Season 1</div>
-          <div className="font-display text-3xl sm:text-5xl tabular text-ink mt-1">
-            {me.points.toLocaleString()}
-          </div>
-          <div className="text-[11px] text-ink-faint">points</div>
+        {/* Progress bar */}
+        <div className="mt-3 h-1.5 rounded-full bg-white/5 overflow-hidden">
+          <div
+            className="h-full bg-gold-400 transition-[width] duration-500"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+
+        {/* Ref link — bottom right */}
+        <div className="mt-2 flex justify-end">
           <ReferralShortcut handle={me.xHandle} />
         </div>
       </div>
