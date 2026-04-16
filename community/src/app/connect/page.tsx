@@ -97,12 +97,17 @@ function ConnectBody() {
             ) : !me ? (
               <div className="text-xs text-ink-faint">Complete step 1 first.</div>
             ) : (
-              <BindWallet
-                xHandle={me.xHandle}
-                xId={me.xId}
-                initialBoundWallet={me.wallet}
-                onBound={(w) => setMe({ ...me, wallet: w })}
-              />
+              <>
+                <BindWallet
+                  xHandle={me.xHandle}
+                  xId={me.xId}
+                  initialBoundWallet={me.wallet}
+                  onBound={(w) => setMe({ ...me, wallet: w })}
+                />
+                <p className="mt-3 text-[11px] text-ink-faint">
+                  On mobile? Open this page inside the <span className="text-ink">MetaMask</span> or <span className="text-ink">Coinbase Wallet</span> app browser.
+                </p>
+              </>
             )}
           </Card>
         </div>

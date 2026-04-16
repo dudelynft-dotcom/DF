@@ -1,15 +1,15 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
+import { useState } from "react";
+import { useAccount, useDisconnect, useSignMessage } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { bindMessage } from "@/lib/bindMessage";
 
-// Wallet bind flow — three possible states:
-//   1. No wallet connected → show list of connectors
-//   2. Wallet connected, not bound → show "Sign to bind"
-//   3. Bound → show bound address + checkmark
+// Wallet bind flow — three states:
+//   1. No wallet connected → RainbowKit ConnectButton (polished modal)
+//   2. Wallet connected, not bound → "Sign to bind"
+//   3. Bound → bound address + checkmark
 //
-// The component is entirely client-side. All server interaction goes
-// through /api/wallet/nonce and /api/wallet/bind.
+// All server interaction goes through /api/wallet/nonce + /api/wallet/bind.
 export function BindWallet({
   xHandle, xId, initialBoundWallet, onBound,
 }: {
@@ -19,12 +19,11 @@ export function BindWallet({
   onBound:  (wallet: `0x${string}`) => void;
 }) {
   const { address, isConnected } = useAccount();
-  const { connectors, connect, isPending: connecting } = useConnect();
   const { disconnect } = useDisconnect();
   const { signMessageAsync, isPending: signing } = useSignMessage();
 
   const [bound, setBound] = useState<`0x${string}` | null>(initialBoundWallet);
-  const [err, setErr]     = useState<string | null>(null);
+  const [err,   setErr]   = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // If the user switches wallet after binding, we don't auto-rebind —
@@ -40,7 +39,7 @@ export function BindWallet({
       if (!nonceRes.ok) throw new Error("nonce");
       const { nonce, issuedAt } = await nonceRes.json() as { nonce: string; issuedAt: string };
 
-      const message = bindMessage({ xHandle, xId, nonce, issuedAt });
+      const message   = bindMessage({ xHandle, xId, nonce, issuedAt });
       const signature = await signMessageAsync({ message });
 
       const bindRes = await fetch("/api/wallet/bind", {
@@ -49,20 +48,17 @@ export function BindWallet({
         body: JSON.stringify({ wallet: address, signature }),
       });
       const bindJson = await bindRes.json();
-      if (!bindRes.ok) {
-        throw new Error(bindJson?.error || "bind_failed");
-      }
+      if (!bindRes.ok) throw new Error(bindJson?.error || "bind_failed");
       setBound(address as `0x${string}`);
       onBound(address as `0x${string}`);
     } catch (e: unknown) {
-      const msg = (e as Error)?.message ?? "unknown";
-      setErr(friendly(msg));
+      setErr(friendly((e as Error)?.message ?? "unknown"));
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Already bound — terminal state for this session's wallet step.
+  // Already bound — terminal state.
   if (bound && !mismatch) {
     return (
       <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-3 text-sm">
@@ -70,21 +66,19 @@ export function BindWallet({
           <Check />
           <span className="text-ink">Wallet bound</span>
         </div>
-        <div className="text-xs text-ink-faint mt-1 font-mono">
-          {short(bound)}
-        </div>
+        <div className="text-xs text-ink-faint mt-1 font-mono">{short(bound)}</div>
       </div>
     );
   }
 
-  // Wallet connected → sign & bind step.
+  // Wallet connected → sign step.
   if (isConnected && address) {
     return (
       <div className="space-y-3">
-        <div className="rounded-md border border-line px-3 py-2.5 text-xs flex items-center justify-between">
-          <span className="text-ink-muted">Connected</span>
-          <span className="font-mono text-ink">{short(address)}</span>
-          <button onClick={() => disconnect()} className="text-ink-faint hover:text-ink text-xs">
+        <div className="rounded-md border border-line px-3 py-2.5 text-xs flex items-center justify-between gap-2">
+          <span className="text-ink-muted shrink-0">Connected</span>
+          <span className="font-mono text-ink truncate">{short(address)}</span>
+          <button onClick={() => disconnect()} className="text-ink-faint hover:text-ink text-xs shrink-0">
             Switch
           </button>
         </div>
@@ -110,37 +104,16 @@ export function BindWallet({
     );
   }
 
-  // No wallet connected → show connector list.
+  // No wallet connected → RainbowKit's polished modal.
   return (
     <div className="space-y-2">
       <p className="text-xs text-ink-faint">Pick a wallet to connect.</p>
-      <ul className="space-y-2">
-        {connectors.map((c) => (
-          <li key={c.uid}>
-            <button
-              onClick={() => connect({ connector: c })}
-              disabled={connecting}
-              className="
-                w-full flex items-center gap-3 px-3 py-2.5 rounded-md
-                border border-line text-sm text-ink
-                hover:border-gold-400/60 hover:bg-white/5 transition-colors
-                disabled:opacity-60
-              "
-            >
-              {c.icon ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={c.icon} alt="" className="h-5 w-5 rounded" />
-              ) : (
-                <div className="h-5 w-5 rounded bg-gold-400/10 border border-gold-400/30 flex items-center justify-center text-gold-300 text-[10px]">
-                  {c.name.slice(0,1).toUpperCase()}
-                </div>
-              )}
-              <span className="flex-1 text-left">{c.name === "Injected" ? "Browser wallet" : c.name}</span>
-              <span className="text-ink-faint">→</span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      <ConnectButton
+        chainStatus="none"
+        showBalance={false}
+        accountStatus="address"
+        label="Connect wallet"
+      />
     </div>
   );
 }
@@ -149,9 +122,9 @@ function short(a: string): string {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 function friendly(msg: string): string {
-  if (msg.includes("x_already_bound")) return "This X account is already bound to a wallet.";
+  if (msg.includes("x_already_bound"))      return "This X account is already bound to a wallet.";
   if (msg.includes("wallet_already_bound")) return "This wallet is already bound to another X account.";
-  if (msg.includes("nonce")) return "Session timed out. Try again.";
+  if (msg.includes("nonce"))                return "Session timed out. Try again.";
   if (msg.toLowerCase().includes("user rejected")) return "You rejected the signature.";
   return "Something went wrong. Try again.";
 }
