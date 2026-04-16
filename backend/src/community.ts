@@ -192,6 +192,38 @@ community.get("/me", (req, res) => {
 });
 
 // ------------------------------------------------------------------
+// GET /community/me/ledger?xId=...&wallet=...&limit=50
+// User-scoped point history. Joins ledger → completions → task_defs
+// so we can render "Follow @DogeForgefun · +100" instead of raw
+// ref_ids. Read-only; no auth required beyond the wallet+xId pair
+// (anyone who knows both already has a session).
+// ------------------------------------------------------------------
+community.get("/me/ledger", (req, res) => {
+  const xId    = String(req.query.xId ?? "");
+  const wallet = String(req.query.wallet ?? "").toLowerCase();
+  const limit  = Math.min(200, Math.max(1, Number(req.query.limit ?? 50)));
+  if (!xId || !wallet) return res.status(400).json({ error: "missing_params" });
+
+  const user = db.prepare(
+    `SELECT id FROM community_users WHERE x_id = ? AND wallet = ?`
+  ).get(xId, wallet) as { id: number } | undefined;
+  if (!user) return res.json({ entries: [] });
+
+  const entries = db.prepare(
+    `SELECT l.id, l.delta, l.reason, l.created_at,
+            t.slug AS task_slug, t.title AS task_title, t.kind AS task_kind
+     FROM community_points_ledger l
+     LEFT JOIN community_completions c ON c.id = l.ref_id AND l.reason = 'task'
+     LEFT JOIN community_task_defs t    ON t.id = c.task_id
+     WHERE l.user_id = ?
+     ORDER BY l.created_at DESC, l.id DESC
+     LIMIT ?`
+  ).all(user.id, limit);
+
+  res.json({ entries });
+});
+
+// ------------------------------------------------------------------
 // GET /community/tasks?xId=...&wallet=...
 // Returns the active task catalog joined with the caller's completion
 // state. Anonymous callers get the catalog without completion info.

@@ -9,11 +9,33 @@ type Me = {
   xAvatar?: string;
   wallet: `0x${string}` | null;
 } | null;
+type Tier = "bronze" | "silver" | "gold" | "diamond";
 type CommunityMe = {
   points: number;
   referrals: number;
-  tier: "bronze" | "silver" | "gold" | "diamond";
+  tier: Tier;
 } | null;
+type LedgerEntry = {
+  id: number;
+  delta: number;
+  reason: string;
+  created_at: number;
+  task_slug: string | null;
+  task_title: string | null;
+  task_kind: string | null;
+};
+
+// Point thresholds for tier promotion — must match backend logic
+// in community.ts.
+const TIER_THRESHOLDS: Record<Tier, number> = {
+  bronze: 0, silver: 1000, gold: 5000, diamond: 25_000,
+};
+const NEXT_TIER: Record<Tier, Tier | null> = {
+  bronze: "silver", silver: "gold", gold: "diamond", diamond: null,
+};
+const TIER_COLOR: Record<Tier, string> = {
+  bronze: "#a07d4a", silver: "#9CA3AF", gold: "#D8BB60", diamond: "#67E8F9",
+};
 
 // Profile surface. Until Step 3 writes real stats, this reflects the
 // live auth state:
@@ -23,14 +45,17 @@ type CommunityMe = {
 export default function Profile() {
   const [me, setMe]   = useState<Me | undefined>(undefined);
   const [stats, setStats] = useState<CommunityMe>(null);
+  const [ledger, setLedger] = useState<LedgerEntry[] | null>(null);
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/auth/me",      { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/community/me", { cache: "no-store" }).then((r) => r.json()),
-    ]).then(([m, c]) => {
+      fetch("/api/auth/me",             { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/community/me",        { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/community/me/ledger", { cache: "no-store" }).then((r) => r.json()),
+    ]).then(([m, c, l]) => {
       setMe(m as Me);
       setStats(c as CommunityMe);
+      setLedger((l?.entries ?? []) as LedgerEntry[]);
     }).catch(() => setMe(null));
   }, []);
 
@@ -77,17 +102,18 @@ export default function Profile() {
       <div className="rounded-2xl border border-line bg-bg-surface/60 overflow-hidden">
         <div className="bg-hero-glow p-4 sm:p-6 lg:p-8 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5">
           <div className="relative shrink-0">
-            {me.xAvatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={me.xAvatar}
-                alt=""
-                className="h-20 w-20 rounded-full border-2 border-gold-400"
-              />
-            ) : (
-              <div className="h-20 w-20 rounded-full border-2 border-gold-400 bg-bg-base" />
-            )}
-            <TierRing tier="bronze" />
+            <TierProgressRing
+              tier={stats?.tier ?? "bronze"}
+              points={stats?.points ?? 0}
+              size={92}
+            >
+              {me.xAvatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={me.xAvatar} alt="" className="h-20 w-20 rounded-full" />
+              ) : (
+                <div className="h-20 w-20 rounded-full bg-bg-base" />
+              )}
+            </TierProgressRing>
           </div>
 
           <div className="flex-1 min-w-0">
@@ -136,11 +162,11 @@ export default function Profile() {
       <h2 className="mt-10 font-display text-xl tracking-tight">Refer & earn</h2>
       <ReferralCard handle={me.xHandle} count={stats?.referrals ?? 0} />
 
-      {/* Upcoming — placeholder cards that light up as Steps land */}
-      <h2 className="mt-10 font-display text-xl tracking-tight">Coming soon</h2>
-      <div className="mt-4 grid sm:grid-cols-2 gap-3">
-        <Upcoming n="03" title="Point history" body="Every point, every reason, every timestamp." />
-        <Upcoming n="08" title="Animated tier ring" body="Bronze → Silver → Gold → Diamond ring with progress." />
+      {/* Point history — real ledger */}
+      <h2 className="mt-10 font-display text-xl tracking-tight">Point history</h2>
+      <PointHistory entries={ledger} />
+      <div className="mt-2 text-[11px] text-ink-faint">
+        Shows up to 50 most recent entries. Full history available in the Season 1 snapshot at season end.
       </div>
 
       <div className="mt-12 text-right">
@@ -238,16 +264,6 @@ function ReferralCard({ handle, count }: { handle: string; count: number }) {
   );
 }
 
-function Upcoming({ n, title, body }: { n: string; title: string; body: string }) {
-  return (
-    <div className="rounded-xl border border-line p-4 bg-bg-surface/40">
-      <div className="font-display text-gold-400 text-xs tabular">STEP {n}</div>
-      <div className="mt-1 font-medium text-ink text-sm">{title}</div>
-      <p className="mt-1 text-xs text-ink-muted leading-relaxed">{body}</p>
-    </div>
-  );
-}
-
 function Dot({ color }: { color: "emerald" | "amber" }) {
   const cls = color === "emerald" ? "bg-emerald-400" : "bg-amber-400";
   return <span className={`inline-block h-1.5 w-1.5 rounded-full ${cls}`} />;
@@ -267,26 +283,116 @@ function TierPill({ tier }: { tier: "bronze" | "silver" | "gold" | "diamond" }) 
   );
 }
 
-function TierRing({ tier }: { tier: "bronze" | "silver" | "gold" | "diamond" }) {
-  // Visual chip in the bottom-right of the avatar indicating tier.
-  const color = {
-    bronze:  "#a07d4a",
-    silver:  "#9CA3AF",
-    gold:    "#D8BB60",
-    diamond: "#67E8F9",
-  }[tier];
+// SVG progress ring around the avatar. Shows how close the user is
+// to their next tier. Stroke colour matches current tier. A small
+// tier chip pins the tier name in the corner for legibility at a
+// glance (icon alone is too abstract).
+function TierProgressRing({
+  tier, points, size, children,
+}: {
+  tier: Tier;
+  points: number;
+  size: number;
+  children: React.ReactNode;
+}) {
+  const next    = NEXT_TIER[tier];
+  const start   = TIER_THRESHOLDS[tier];
+  const end     = next ? TIER_THRESHOLDS[next] : start;
+  // Max tier → ring full; otherwise interpolate between thresholds.
+  const progress = next
+    ? Math.max(0, Math.min(1, (points - start) / (end - start)))
+    : 1;
+
+  const stroke  = 4;
+  const r       = (size - stroke) / 2;
+  const c       = 2 * Math.PI * r;
+  const dash    = `${progress * c} ${c}`;
+  const color   = TIER_COLOR[tier];
+
   return (
-    <div
-      aria-hidden
-      className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full border-2 border-bg-base flex items-center justify-center"
-      style={{ background: color }}
-    >
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-              fill="#0E0D08" />
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        {/* Track */}
+        <circle cx={size / 2} cy={size / 2} r={r}
+                fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={stroke} />
+        {/* Progress */}
+        <circle cx={size / 2} cy={size / 2} r={r}
+                fill="none" stroke={color} strokeWidth={stroke}
+                strokeDasharray={dash} strokeLinecap="round"
+                style={{ transition: "stroke-dasharray 700ms ease" }} />
       </svg>
+      {/* Avatar centred */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        {children}
+      </div>
+      {/* Tier label chip */}
+      <div
+        aria-hidden
+        className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-full border-2 border-bg-base text-[9px] uppercase tracking-[0.2em] font-medium"
+        style={{ background: color, color: "#0E0D08" }}
+      >
+        {tier}
+      </div>
     </div>
   );
+}
+
+function PointHistory({ entries }: { entries: LedgerEntry[] | null }) {
+  if (entries === null) {
+    return (
+      <div className="mt-4 space-y-2">
+        {[...Array(5)].map((_, i) => <div key={i} className="h-12 rounded bg-white/5 animate-pulse" />)}
+      </div>
+    );
+  }
+  if (entries.length === 0) {
+    return (
+      <div className="mt-4 rounded-xl border border-line bg-bg-surface/40 p-6 text-center text-sm text-ink-muted">
+        No points yet. Claim a task to start the history.
+      </div>
+    );
+  }
+  return (
+    <ul className="mt-4 divide-y divide-line border border-line rounded-xl overflow-hidden bg-bg-surface/40">
+      {entries.map((e) => (
+        <li key={e.id} className="p-3 sm:p-4 flex items-center gap-3">
+          <div className={`shrink-0 w-14 text-right font-display tabular text-sm sm:text-base ${e.delta > 0 ? "text-emerald-300" : "text-red-300"}`}>
+            {e.delta > 0 ? "+" : ""}{e.delta}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm text-ink truncate">
+              {e.task_title ?? prettyReason(e.reason)}
+            </div>
+            <div className="text-[11px] text-ink-faint">
+              {timeAgo(e.created_at)}
+              {e.task_kind && <> · <span className="uppercase tracking-[0.15em]">{e.task_kind}</span></>}
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function prettyReason(raw: string): string {
+  // Backend tags adjustments with prefixes like "admin:bulk:reason",
+  // "admin:tweet-reject:...", "admin:ban:...". Strip the prefix for
+  // display but keep the meaning obvious.
+  if (raw.startsWith("admin:bulk:"))           return `Bulk award: ${raw.slice(11)}`;
+  if (raw.startsWith("admin:tweet-reject:"))   return `Tweet rejected: ${raw.slice(19)}`;
+  if (raw.startsWith("admin:ban:"))            return `Ban penalty: ${raw.slice(10)}`;
+  if (raw.startsWith("admin:"))                return `Admin: ${raw.slice(6)}`;
+  if (raw === "referral")                      return "Referral share";
+  if (raw === "task")                          return "Task completion";
+  return raw;
+}
+function timeAgo(sec: number): string {
+  const s = Math.floor(Date.now() / 1000) - sec;
+  if (s < 60)            return "just now";
+  if (s < 3600)          return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400)         return `${Math.floor(s / 3600)}h ago`;
+  if (s < 86400 * 30)    return `${Math.floor(s / 86400)}d ago`;
+  return new Date(sec * 1000).toLocaleDateString();
 }
 
 function shortAddr(a: string): string {
