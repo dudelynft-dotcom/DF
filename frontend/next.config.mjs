@@ -11,11 +11,13 @@
 // where the page may talk to.
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  // blob: + unpkg allowed so /trailer can load ffmpeg.wasm core + worker
+  // for in-browser MP4 conversion.
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://unpkg.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
-  "connect-src 'self' https: wss:",
+  "connect-src 'self' https: wss: blob:",
   "frame-src 'self' https://verify.walletconnect.com https://verify.walletconnect.org",
   "worker-src 'self' blob:",
   "base-uri 'self'",

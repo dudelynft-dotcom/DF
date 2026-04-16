@@ -45,7 +45,11 @@ export default function Trailer() {
   const [fontsReady, setFontsReady] = useState(false);
   const [mode, setMode] = useState<"idle" | "preview" | "recording" | "done">("idle");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [mp4Url, setMp4Url] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
+  const [convertMsg, setConvertMsg] = useState("");
   const [progress, setProgress] = useState(0);
+  const webmBlobRef = useRef<Blob | null>(null);
   const dogeImgRef = useRef<HTMLImageElement | null>(null);
 
   // Load brand fonts AND the doge sprite before enabling record.
@@ -120,6 +124,70 @@ export default function Trailer() {
     loop();
   };
 
+  // In-browser WebM → MP4 transcode via ffmpeg.wasm. The library is
+  // imported dynamically so the 15 MB wasm bundle only loads when
+  // the user actually clicks "Get MP4". Single-threaded build — no
+  // SharedArrayBuffer / COOP / COEP dance needed.
+  const convertToMp4 = async () => {
+    const blob = webmBlobRef.current;
+    if (!blob) return;
+    setConverting(true);
+    setConvertMsg("Loading converter…");
+    try {
+      // Packages resolve at Vercel build time; suppress local type-
+      // checker here since the junctioned node_modules is missing
+      // them in this dev environment. Runtime behavior is covered
+      // by the try/catch.
+      // @ts-expect-error - resolved at build time via Vercel install
+      const ff = await import("@ffmpeg/ffmpeg");
+      // @ts-expect-error - resolved at build time via Vercel install
+      const util = await import("@ffmpeg/util");
+      const ffmpeg = new ff.FFmpeg();
+      ffmpeg.on("log", (evt: { message: string }) => {
+        // Surface meaningful progress messages; ffmpeg is chatty.
+        const m = evt?.message ?? "";
+        if (m.includes("frame=") || m.includes("time=")) {
+          setConvertMsg(m.trim().slice(0, 80));
+        }
+      });
+      // Core + wasm from the pinned unpkg version. Allowed in CSP.
+      const base = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
+      await ffmpeg.load({
+        coreURL: `${base}/ffmpeg-core.js`,
+        wasmURL: `${base}/ffmpeg-core.wasm`,
+      });
+      setConvertMsg("Transcoding…");
+      await ffmpeg.writeFile("in.webm", await util.fetchFile(blob));
+      // libx264 + AAC → H.264 video + AAC audio. 'fast' preset keeps
+      // CPU time sane; crf 22 is good-quality default.
+      await ffmpeg.exec([
+        "-i", "in.webm",
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "22",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-movflags", "+faststart",
+        "out.mp4",
+      ]);
+      const data = await ffmpeg.readFile("out.mp4");
+      // data is Uint8Array; BlobPart accepts ArrayBuffer — copy to a
+      // fresh buffer so the type is unambiguous.
+      const bytes = data as Uint8Array;
+      // Copy into a fresh plain ArrayBuffer so Blob accepts it
+      // regardless of SharedArrayBuffer vs ArrayBuffer ambiguity.
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      const mp4Blob = new Blob([copy.buffer], { type: "video/mp4" });
+      setMp4Url(URL.createObjectURL(mp4Blob));
+      setConvertMsg("Ready");
+    } catch (e: unknown) {
+      setConvertMsg(`Failed: ${(e as Error).message}`);
+    } finally {
+      setConverting(false);
+    }
+  };
+
   const record = async () => {
     if (!canvasRef.current) return;
     setDownloadUrl(null);
@@ -158,8 +226,10 @@ export default function Trailer() {
     };
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" });
+      webmBlobRef.current = blob;
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
+      setMp4Url(null); // reset — user must re-convert after each record
       setMode("done");
       audioCtx.close();
     };
@@ -174,11 +244,10 @@ export default function Trailer() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
       <h1 className="font-display text-3xl tracking-tight">Launch trailer</h1>
       <p className="mt-2 text-ink-muted text-sm max-w-2xl">
-        20-second 16:9 brand trailer with synthesised soundtrack.
-        Click <strong className="text-ink">Record</strong> → wait 20 seconds →
-        download the WebM. Convert to MP4 at{" "}
-        <a href="https://cloudconvert.com/webm-to-mp4" target="_blank" rel="noreferrer" className="text-gold-300 hover:text-gold-200 underline">cloudconvert.com/webm-to-mp4</a>{" "}
-        before uploading to X.
+        22-second 16:9 brand trailer with synthesised soundtrack.
+        Click <strong className="text-ink">Record</strong> → wait 22 seconds →
+        click <strong className="text-ink">Get MP4</strong> to transcode in-browser →
+        upload straight to X. No external converter.
       </p>
 
       <div className="mt-6 mx-auto" style={{ maxWidth: 900 }}>
@@ -214,16 +283,37 @@ export default function Trailer() {
         >
           {mode === "recording" ? `Recording… ${Math.floor(progress * DURATION)}s` : "Record + Download"}
         </button>
+        {downloadUrl && !mp4Url && (
+          <button
+            onClick={convertToMp4}
+            disabled={converting}
+            className="px-5 py-2.5 rounded-md bg-gold-400 text-bg-base text-sm font-medium hover:bg-gold-300 disabled:opacity-60"
+          >
+            {converting ? "Converting…" : "Get MP4 (for X)"}
+          </button>
+        )}
+        {mp4Url && (
+          <a
+            href={mp4Url}
+            download={`doge-forge-trailer-${Date.now()}.mp4`}
+            className="px-5 py-2.5 rounded-md border-2 border-emerald-500/60 text-emerald-300 text-sm font-medium hover:bg-emerald-500/10"
+          >
+            ↓ Download MP4 (ready for X)
+          </a>
+        )}
         {downloadUrl && (
           <a
             href={downloadUrl}
             download={`doge-forge-trailer-${Date.now()}.webm`}
-            className="px-5 py-2.5 rounded-md border border-emerald-500/40 text-emerald-300 text-sm hover:bg-emerald-500/10"
+            className="px-5 py-2.5 rounded-md border border-line text-ink-muted text-xs hover:text-ink hover:border-gold-400/60"
           >
-            ↓ Download .webm
+            .webm fallback
           </a>
         )}
       </div>
+      {convertMsg && (
+        <p className="mt-3 text-center text-xs text-ink-faint font-mono">{convertMsg}</p>
+      )}
 
       <p className="mt-8 text-xs text-ink-faint text-center max-w-lg mx-auto">
         1920×1080, 30 fps, 8 Mbps video + 192 kbps Opus audio.
