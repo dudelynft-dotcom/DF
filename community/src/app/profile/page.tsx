@@ -34,7 +34,10 @@ const NEXT_TIER: Record<Tier, Tier | null> = {
   bronze: "silver", silver: "gold", gold: "diamond", diamond: null,
 };
 const TIER_COLOR: Record<Tier, string> = {
-  bronze: "#a07d4a", silver: "#9CA3AF", gold: "#D8BB60", diamond: "#67E8F9",
+  bronze:  "#E6A55B",  // brightened from a07d4a — readable against dark bg
+  silver:  "#D1D5DB",
+  gold:    "#F3C45A",
+  diamond: "#67E8F9",
 };
 
 // Profile surface. Until Step 3 writes real stats, this reflects the
@@ -105,7 +108,7 @@ export default function Profile() {
             <TierProgressRing
               tier={stats?.tier ?? "bronze"}
               points={stats?.points ?? 0}
-              size={92}
+              size={104}
             >
               {me.xAvatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -303,19 +306,18 @@ function TierProgressRing({
     ? Math.max(0, Math.min(1, (points - start) / (end - start)))
     : 1;
 
-  const stroke = 4;
+  const stroke = 6;
   const r      = (size - stroke) / 2;
   const c      = 2 * Math.PI * r;
   const color  = TIER_COLOR[tier];
 
   // Entry animation — start at 0, then tick up to target on mount.
-  // Using rAF ensures the first paint captures the "empty" state so
-  // the CSS transition has something to animate from.
+  // Small delay so the user's eye catches the transition; rAF on its
+  // own is too fast to perceive.
   const [animated, setAnimated] = useState(0);
   useEffect(() => {
-    let raf = 0;
-    raf = requestAnimationFrame(() => setAnimated(target));
-    return () => cancelAnimationFrame(raf);
+    const t = setTimeout(() => setAnimated(target), 180);
+    return () => clearTimeout(t);
   }, [target]);
   const dash = `${animated * c} ${c}`;
 
@@ -330,8 +332,8 @@ function TierProgressRing({
                 fill="none" stroke={color} strokeWidth={stroke}
                 strokeDasharray={dash} strokeLinecap="round"
                 style={{
-                  transition: "stroke-dasharray 900ms cubic-bezier(0.2, 0.8, 0.2, 1)",
-                  filter: tier === "diamond" ? `drop-shadow(0 0 6px ${color})` : undefined,
+                  transition: "stroke-dasharray 1200ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+                  filter: `drop-shadow(0 0 ${tier === "diamond" ? 8 : 4}px ${color})`,
                 }} />
         {/* Diamond shimmer — second stroke that orbits the ring */}
         {tier === "diamond" && (
