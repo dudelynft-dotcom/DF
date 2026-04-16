@@ -53,6 +53,7 @@ export default function CommunityAdmin() {
   const [drawerUserId, setDrawerUserId] = useState<number | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [userSearch, setUserSearch] = useState("");
+  const [taskEditing, setTaskEditing] = useState<TaskRow | "new" | null>(null);
 
   const authed = async (path: string, init?: RequestInit) =>
     fetch(`${BACKEND}${path}`, {
@@ -163,12 +164,20 @@ export default function CommunityAdmin() {
             Bulk award…
           </button>
         )}
+        {tab === "tasks" && (
+          <button
+            onClick={() => setTaskEditing("new")}
+            className="ml-auto px-3 py-1.5 my-1 rounded-md bg-gold-400 text-bg-base text-xs font-medium hover:bg-gold-300"
+          >
+            + New task
+          </button>
+        )}
       </nav>
 
       {/* Tab content */}
       <div className="mt-6">
         {tab === "users"     && <UsersTab users={users} search={userSearch} setSearch={setUserSearch} onOpen={setDrawerUserId} />}
-        {tab === "tasks"     && <TasksTab tasks={tasks} authed={authed} refresh={refresh} />}
+        {tab === "tasks"     && <TasksTab tasks={tasks} authed={authed} refresh={refresh} onEdit={setTaskEditing} />}
         {tab === "tweets"    && <TweetsTab tweets={tweets} authed={authed} refresh={refresh} />}
         {tab === "referrals" && <ReferralsTab rows={refs} onOpenUser={setDrawerUserId} />}
       </div>
@@ -181,6 +190,16 @@ export default function CommunityAdmin() {
       {/* Bulk award modal */}
       {bulkOpen && (
         <BulkAward authed={authed} onClose={() => setBulkOpen(false)} onDone={refresh} />
+      )}
+
+      {/* Task create / edit modal */}
+      {taskEditing && (
+        <TaskEditor
+          task={taskEditing === "new" ? null : taskEditing}
+          authed={authed}
+          onClose={() => setTaskEditing(null)}
+          onDone={() => { setTaskEditing(null); refresh(); }}
+        />
       )}
     </div>
   );
@@ -247,10 +266,11 @@ function UsersTab({ users, search, setSearch, onOpen }: {
   );
 }
 
-function TasksTab({ tasks, authed, refresh }: {
+function TasksTab({ tasks, authed, refresh, onEdit }: {
   tasks: TaskRow[] | null;
   authed: (p: string, i?: RequestInit) => Promise<Response>;
   refresh: () => void;
+  onEdit: (t: TaskRow) => void;
 }) {
   if (!tasks) return <Skeleton />;
   const onToggle = async (t: TaskRow) => {
@@ -270,11 +290,12 @@ function TasksTab({ tasks, authed, refresh }: {
             <Th className="text-right">Claims</Th>
             <Th className="text-right">Active</Th>
             <Th></Th>
+            <Th></Th>
           </tr>
         </thead>
         <tbody>
           {tasks.map((t) => (
-            <tr key={t.id} className="border-b border-line/40">
+            <tr key={t.id} className="border-b border-line/40 hover:bg-white/[0.02]">
               <Td className="font-mono text-xs">{t.slug}</Td>
               <Td className="text-xs">{t.kind}</Td>
               <Td>{t.title}</Td>
@@ -283,6 +304,7 @@ function TasksTab({ tasks, authed, refresh }: {
               <Td className="text-right tabular">{t.claim_count}</Td>
               <Td className="text-right"><span className={t.active ? "text-emerald-300" : "text-ink-faint"}>{t.active ? "on" : "off"}</span></Td>
               <Td className="text-right"><button onClick={() => onToggle(t)} className="text-xs text-gold-300 hover:text-gold-200">{t.active ? "Disable" : "Enable"}</button></Td>
+              <Td className="text-right"><button onClick={() => onEdit(t)} className="text-xs text-ink-muted hover:text-ink">Edit</button></Td>
             </tr>
           ))}
         </tbody>
@@ -552,6 +574,166 @@ function BulkAward({ authed, onClose, onDone }: {
         </div>
       </div>
     </div>
+  );
+}
+
+function TaskEditor({ task, authed, onClose, onDone }: {
+  task: TaskRow | null;
+  authed: (p: string, i?: RequestInit) => Promise<Response>;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const creating = !task;
+  const [slug, setSlug] = useState(task?.slug ?? "");
+  const [kind, setKind] = useState(task?.kind ?? "social");
+  const [title, setTitle] = useState(task?.title ?? "");
+  const [description, setDescription] = useState(
+    // Description isn't on TaskRow; show empty in edit until reload.
+    "",
+  );
+  const [points, setPoints] = useState(String(task?.points ?? 100));
+  const [maxCompletions, setMaxCompletions] = useState(String(task?.max_completions ?? 1));
+  const [sortOrder, setSortOrder] = useState(String(task?.sort_order ?? 100));
+  const [payloadText, setPayloadText] = useState(
+    creating
+      // Default to trust-based so new tasks claim on click without needing verifier code.
+      ? '{\n  "trustBased": true\n}'
+      : "{}",
+  );
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    // Validate payload JSON
+    let payload: Record<string, unknown> = {};
+    try {
+      payload = payloadText.trim() ? JSON.parse(payloadText) : {};
+      if (typeof payload !== "object" || Array.isArray(payload)) throw new Error();
+    } catch {
+      alert("Payload must be a valid JSON object.");
+      return;
+    }
+    const pts = parseInt(points, 10);
+    const max = parseInt(maxCompletions, 10);
+    const sort = parseInt(sortOrder, 10);
+    if (!Number.isInteger(pts) || pts <= 0) { alert("Points must be a positive integer."); return; }
+    if (!Number.isInteger(max))             { alert("Max completions must be integer (-1 = unlimited)."); return; }
+
+    setBusy(true);
+    try {
+      if (creating) {
+        if (!/^[a-z0-9-]+$/.test(slug)) { alert("Slug: lowercase letters, digits, hyphens only."); return; }
+        const r = await authed("/community/admin/task-create", {
+          method: "POST",
+          body: JSON.stringify({
+            slug, kind, title, description,
+            points: pts, maxCompletions: max, payload, sortOrder: sort,
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok) { alert(`Failed: ${j?.error}`); return; }
+      } else {
+        const r = await authed("/community/admin/task-update", {
+          method: "POST",
+          body: JSON.stringify({
+            id: task!.id, title, description,
+            points: pts, maxCompletions: max, payload, sortOrder: sort,
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok) { alert(`Failed: ${j?.error}`); return; }
+      }
+      onDone();
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-xl rounded-xl border border-line bg-bg-surface p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between">
+          <h3 className="font-display text-xl">{creating ? "New task" : `Edit: ${task!.slug}`}</h3>
+          <button onClick={onClose} className="text-ink-faint hover:text-ink text-xl leading-none">×</button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Slug">
+            <input
+              type="text" value={slug}
+              onChange={(e) => setSlug(e.target.value.toLowerCase())}
+              disabled={!creating}
+              placeholder="e.g. follow-partner"
+              className="w-full px-3 py-2 rounded-md bg-bg-base border border-line text-sm font-mono disabled:opacity-50"
+            />
+          </Field>
+          <Field label="Kind">
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value)}
+              disabled={!creating}
+              className="w-full px-3 py-2 rounded-md bg-bg-base border border-line text-sm disabled:opacity-50"
+            >
+              {["social","trade","mine","identity","daily","quiz","other"].map((k) =>
+                <option key={k} value={k}>{k}</option>
+              )}
+            </select>
+          </Field>
+        </div>
+
+        <Field label="Title">
+          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+                 className="w-full px-3 py-2 rounded-md bg-bg-base border border-line text-sm" />
+        </Field>
+
+        <Field label="Description">
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
+                    placeholder={creating ? "What does this task ask users to do?" : "(leave blank to keep existing)"}
+                    className="w-full px-3 py-2 rounded-md bg-bg-base border border-line text-sm" />
+        </Field>
+
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Points">
+            <input type="number" value={points} onChange={(e) => setPoints(e.target.value)}
+                   className="w-full px-3 py-2 rounded-md bg-bg-base border border-line text-sm tabular" />
+          </Field>
+          <Field label="Max (-1 = ∞)">
+            <input type="number" value={maxCompletions} onChange={(e) => setMaxCompletions(e.target.value)}
+                   className="w-full px-3 py-2 rounded-md bg-bg-base border border-line text-sm tabular" />
+          </Field>
+          <Field label="Sort order">
+            <input type="number" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}
+                   className="w-full px-3 py-2 rounded-md bg-bg-base border border-line text-sm tabular" />
+          </Field>
+        </div>
+
+        <Field label="Payload JSON">
+          <textarea value={payloadText} onChange={(e) => setPayloadText(e.target.value)} rows={5}
+                    className="w-full px-3 py-2 rounded-md bg-bg-base border border-line text-xs font-mono" />
+          <div className="mt-1 text-[11px] text-ink-faint leading-relaxed">
+            Set <span className="font-mono text-ink">{'{ "trustBased": true }'}</span> for admin-created
+            tasks to claim on click without a verifier. Existing kinds (trade/mine/identity/daily/quiz)
+            have their own verifiers keyed by slug — creating a new slug of those kinds won&apos;t work
+            without code changes.
+          </div>
+        </Field>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-4 py-2 rounded-md text-sm text-ink-muted hover:text-ink">Cancel</button>
+          <button onClick={submit} disabled={busy}
+                  className="px-4 py-2 rounded-md bg-gold-400 text-bg-base text-sm font-medium disabled:opacity-60">
+            {busy ? "…" : creating ? "Create" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-ink-faint mb-1">{label}</div>
+      {children}
+    </label>
   );
 }
 

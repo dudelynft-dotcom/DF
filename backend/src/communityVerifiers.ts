@@ -64,8 +64,15 @@ export async function runVerifier(
   slug: string, user: User, task: Task, body: Record<string, unknown>,
 ): Promise<VerifyResult> {
   const fn = verifiers[slug];
-  if (!fn) return { ok: false, reason: "unknown_task" };
-  return fn(user, task, body);
+  if (fn) return fn(user, task, body);
+  // Fallback: if the task payload carries `trustBased: true`, award
+  // on click without any verification. Lets admins create new social
+  // tasks from the UI without code changes.
+  const payload = safeJson(task.payload) as { trustBased?: boolean };
+  if (payload.trustBased === true) {
+    return { ok: true, points: task.points, proof: { type: "trust_based", slug } };
+  }
+  return { ok: false, reason: "unknown_task" };
 }
 
 // ============================================================

@@ -12,7 +12,7 @@
 import { Router, type Request, type Response } from "express";
 import crypto from "node:crypto";
 import { db } from "./db.js";
-import { getMineVolumeUsd, getTradeVolumeUsd, isKnownTask, runVerifier, QUIZ_QUESTIONS } from "./communityVerifiers.js";
+import { getMineVolumeUsd, getTradeVolumeUsd, runVerifier, QUIZ_QUESTIONS } from "./communityVerifiers.js";
 import { verifyTgLogin, type TgLoginPayload } from "./telegram.js";
 
 // Simple in-memory rate limiter. Sliding window, per (xId OR IP) key.
@@ -349,7 +349,9 @@ community.post("/claim", async (req, res) => {
   if (!verifyCaller(req, res)) return;
   const { xId, wallet, slug } = req.body as { xId: string; wallet: string; slug: string };
   if (!slug) return res.status(400).json({ error: "missing_slug" });
-  if (!isKnownTask(slug)) return res.status(404).json({ error: "unknown_slug" });
+  // No isKnownTask check here — runVerifier falls back to the
+  // trust-based path for admin-created tasks. Genuine unknown
+  // slugs bounce later with reason "unknown_task".
 
   // Rate limit by xId (primary) with a fallback on remote IP for
   // defence-in-depth. 10 claims / minute / key. Prevents script farmers.
@@ -518,6 +520,78 @@ community.post("/admin/task-active", (req, res) => {
   const { taskId, active } = req.body as { taskId: number; active: boolean };
   if (!Number.isInteger(taskId)) return res.status(400).json({ error: "bad_task_id" });
   db.prepare(`UPDATE community_task_defs SET active = ? WHERE id = ?`).run(active ? 1 : 0, taskId);
+  res.json({ ok: true });
+});
+
+/// POST /community/admin/task-create
+/// Body: { slug, kind, title, description, points, maxCompletions, payload?, sortOrder? }
+/// Creates a new task def. If payload.trustBased=true the task self-
+/// attests on claim — no verifier code change needed. Otherwise the
+/// slug must match a registered verifier or claims will fail.
+community.post("/admin/task-create", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const {
+    slug, kind, title, description, points, maxCompletions,
+    payload, sortOrder,
+  } = req.body as {
+    slug: string; kind: string; title: string; description: string;
+    points: number; maxCompletions: number;
+    payload?: Record<string, unknown>; sortOrder?: number;
+  };
+
+  if (typeof slug  !== "string" || !/^[a-z0-9-]+$/.test(slug))
+    return res.status(400).json({ error: "bad_slug", hint: "lowercase letters, digits, hyphens" });
+  if (!["social","trade","mine","identity","daily","quiz","other"].includes(kind))
+    return res.status(400).json({ error: "bad_kind" });
+  if (typeof title !== "string" || !title)       return res.status(400).json({ error: "missing_title" });
+  if (typeof description !== "string")            return res.status(400).json({ error: "missing_description" });
+  if (!Number.isInteger(points) || points <= 0)   return res.status(400).json({ error: "bad_points" });
+  if (!Number.isInteger(maxCompletions))          return res.status(400).json({ error: "bad_max" });
+
+  const dup = db.prepare(`SELECT id FROM community_task_defs WHERE slug = ?`).get(slug);
+  if (dup) return res.status(409).json({ error: "slug_exists" });
+
+  const payloadStr = JSON.stringify(payload ?? {});
+  const sort = Number.isInteger(sortOrder) ? Number(sortOrder) : 100;
+  const info = db.prepare(
+    `INSERT INTO community_task_defs
+       (slug, kind, title, description, points, max_completions, payload, sort_order, active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
+  ).run(slug, kind, title, description, points, maxCompletions, payloadStr, sort);
+
+  res.json({ ok: true, id: Number(info.lastInsertRowid) });
+});
+
+/// POST /community/admin/task-update
+/// Body: { id, title?, description?, points?, maxCompletions?, payload?, sortOrder? }
+/// Partial update. Slug + kind are immutable (would invalidate
+/// existing completions' FK meaning).
+community.post("/admin/task-update", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const body = req.body as {
+    id: number;
+    title?: string; description?: string;
+    points?: number; maxCompletions?: number;
+    payload?: Record<string, unknown>; sortOrder?: number;
+  };
+  if (!Number.isInteger(body.id)) return res.status(400).json({ error: "bad_id" });
+
+  const task = db.prepare(`SELECT id FROM community_task_defs WHERE id = ?`).get(body.id);
+  if (!task) return res.status(404).json({ error: "task_not_found" });
+
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  if (typeof body.title === "string" && body.title)       { sets.push("title = ?");           vals.push(body.title); }
+  if (typeof body.description === "string")               { sets.push("description = ?");     vals.push(body.description); }
+  if (Number.isInteger(body.points) && (body.points as number) > 0) {
+                                                            sets.push("points = ?");          vals.push(body.points); }
+  if (Number.isInteger(body.maxCompletions))              { sets.push("max_completions = ?"); vals.push(body.maxCompletions); }
+  if (body.payload && typeof body.payload === "object")   { sets.push("payload = ?");         vals.push(JSON.stringify(body.payload)); }
+  if (Number.isInteger(body.sortOrder))                   { sets.push("sort_order = ?");      vals.push(body.sortOrder); }
+  if (sets.length === 0) return res.status(400).json({ error: "nothing_to_update" });
+
+  vals.push(body.id);
+  db.prepare(`UPDATE community_task_defs SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
   res.json({ ok: true });
 });
 
