@@ -177,16 +177,16 @@ const SEED = [
   { slug: "join-tg-group",   kind: "social", title: "Join the Telegram community",        description: "Community chat. Link Telegram first; verified via bot, no self-attest.",                points: 75,  max: 1, payload: '{"chat":"@dogeforge","url":"https://t.me/dogeforge"}',    sort: 14 },
 
   // --- Trade volume tiers ---
-  { slug: "trade-100",   kind: "trade", title: "Trade $100 volume",   description: "Route $100 through the DOGE FORGE DEX.",   points: 150,  max: 1, payload: '{"thresholdUsd":100}',   sort: 20 },
-  { slug: "trade-1000",  kind: "trade", title: "Trade $1,000 volume", description: "Route $1,000 through the DOGE FORGE DEX.", points: 500,  max: 1, payload: '{"thresholdUsd":1000}',  sort: 21 },
-  { slug: "trade-5000",  kind: "trade", title: "Trade $5,000 volume", description: "Route $5,000 through the DOGE FORGE DEX.", points: 1500, max: 1, payload: '{"thresholdUsd":5000}',  sort: 22 },
-  { slug: "trade-25000", kind: "trade", title: "Trade $25,000 volume",description: "Whale tier: $25,000 total volume.",         points: 5000, max: 1, payload: '{"thresholdUsd":25000}', sort: 23 },
+  { slug: "trade-100",   kind: "trade", title: "Trade $100 volume",   description: "Route $100 through the DOGE FORGE DEX on Arc testnet. Uses testnet USDC (free from faucet).",   points: 150,  max: 1, payload: '{"thresholdUsd":100}',   sort: 20 },
+  { slug: "trade-1000",  kind: "trade", title: "Trade $1,000 volume", description: "Route $1,000 through the DOGE FORGE DEX on Arc testnet. Uses testnet USDC.", points: 500,  max: 1, payload: '{"thresholdUsd":1000}',  sort: 21 },
+  { slug: "trade-5000",  kind: "trade", title: "Trade $5,000 volume", description: "Route $5,000 on Arc testnet. Get testnet USDC free at faucet.circle.com.", points: 1500, max: 1, payload: '{"thresholdUsd":5000}',  sort: 22 },
+  { slug: "trade-25000", kind: "trade", title: "Trade $25,000 volume",description: "Whale tier: $25,000 total volume on Arc testnet.",         points: 5000, max: 1, payload: '{"thresholdUsd":25000}', sort: 23 },
 
   // --- Mine commitment tiers ---
-  { slug: "mine-100",   kind: "mine", title: "Mine with $100",   description: "Commit $100 USDC to the miner.",   points: 150,  max: 1, payload: '{"thresholdUsd":100}',   sort: 30 },
-  { slug: "mine-500",   kind: "mine", title: "Mine with $500",   description: "Commit $500 USDC to the miner.",   points: 400,  max: 1, payload: '{"thresholdUsd":500}',   sort: 31 },
-  { slug: "mine-1000",  kind: "mine", title: "Mine with $1,000", description: "Commit $1,000 USDC to the miner.", points: 800,  max: 1, payload: '{"thresholdUsd":1000}',  sort: 32 },
-  { slug: "mine-5000",  kind: "mine", title: "Mine with $5,000", description: "Commit $5,000 USDC to the miner.", points: 3000, max: 1, payload: '{"thresholdUsd":5000}',  sort: 33 },
+  { slug: "mine-100",   kind: "mine", title: "Mine with $100",   description: "Commit $100 testnet USDC to the miner. Free from faucet.circle.com.",   points: 150,  max: 1, payload: '{"thresholdUsd":100}',   sort: 30 },
+  { slug: "mine-500",   kind: "mine", title: "Mine with $500",   description: "Commit $500 testnet USDC to the miner.",   points: 400,  max: 1, payload: '{"thresholdUsd":500}',   sort: 31 },
+  { slug: "mine-1000",  kind: "mine", title: "Mine with $1,000", description: "Commit $1,000 testnet USDC to the miner.", points: 800,  max: 1, payload: '{"thresholdUsd":1000}',  sort: 32 },
+  { slug: "mine-5000",  kind: "mine", title: "Mine with $5,000", description: "Commit $5,000 testnet USDC to the miner.", points: 3000, max: 1, payload: '{"thresholdUsd":5000}',  sort: 33 },
 
   // --- Identity ---
   { slug: "claim-fdoge-name", kind: "identity", title: "Claim your .fdoge identity", description: "Register your on-chain name at TdogeNames.", points: 300, max: 1, payload: '{}', sort: 40 },
@@ -205,6 +205,16 @@ for (const t of SEED) seedTask.run(t);
 db.prepare(`UPDATE community_task_defs SET active = 0 WHERE slug = 'follow-arc'`).run();
 db.prepare(`UPDATE community_task_defs SET active = 0 WHERE slug = 'join-telegram'`).run();
 db.prepare(`UPDATE community_task_defs SET points = 100 WHERE slug = 'daily-tweet'`).run();
+
+// Clarify testnet USDC in trade/mine descriptions (users confused about mainnet).
+db.prepare(`UPDATE community_task_defs SET description = 'Route $100 through the DOGE FORGE DEX on Arc testnet. Uses testnet USDC (free from faucet).' WHERE slug = 'trade-100'`).run();
+db.prepare(`UPDATE community_task_defs SET description = 'Route $1,000 through the DOGE FORGE DEX on Arc testnet. Uses testnet USDC.' WHERE slug = 'trade-1000'`).run();
+db.prepare(`UPDATE community_task_defs SET description = 'Route $5,000 on Arc testnet. Get testnet USDC free at faucet.circle.com.' WHERE slug = 'trade-5000'`).run();
+db.prepare(`UPDATE community_task_defs SET description = 'Whale tier: $25,000 total volume on Arc testnet.' WHERE slug = 'trade-25000'`).run();
+db.prepare(`UPDATE community_task_defs SET description = 'Commit $100 testnet USDC to the miner. Free from faucet.circle.com.' WHERE slug = 'mine-100'`).run();
+db.prepare(`UPDATE community_task_defs SET description = 'Commit $500 testnet USDC to the miner.' WHERE slug = 'mine-500'`).run();
+db.prepare(`UPDATE community_task_defs SET description = 'Commit $1,000 testnet USDC to the miner.' WHERE slug = 'mine-1000'`).run();
+db.prepare(`UPDATE community_task_defs SET description = 'Commit $5,000 testnet USDC to the miner.' WHERE slug = 'mine-5000'`).run();
 
 // Add tg_user_id / tg_username columns. SQLite has no
 // ALTER IF NOT EXISTS — introspect PRAGMA first.

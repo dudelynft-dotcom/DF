@@ -114,24 +114,25 @@ export default function Tasks() {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
       <Stats me={me} totalTasks={tasks.length} doneTasks={counts.all.done} />
 
-      <div className="mt-8 grid lg:grid-cols-[200px_minmax(0,1fr)] gap-6">
-        {/* Left filter nav */}
+      <div className="mt-6 sm:mt-8 grid lg:grid-cols-[200px_minmax(0,1fr)] gap-4 lg:gap-6">
+        {/* Filter nav — compact pill row on mobile, vertical sidebar on lg */}
         <nav className="lg:sticky lg:top-20 lg:self-start">
-          <div className="text-[11px] uppercase tracking-[0.3em] text-ink-faint mb-3">Categories</div>
-          <ul className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible -mx-1 px-1">
+          <div className="hidden lg:block text-[11px] uppercase tracking-[0.3em] text-ink-faint mb-3">Categories</div>
+          <ul className="flex flex-wrap lg:flex-col gap-1.5 lg:gap-1">
             {FILTERS.map((f) => {
               const c = counts[f.id];
               const active = filter === f.id;
               return (
-                <li key={f.id} className="shrink-0">
+                <li key={f.id}>
                   <button
                     onClick={() => setFilter(f.id)}
                     className={`
-                      w-full flex items-center justify-between gap-3 px-3 py-2 rounded-md text-sm whitespace-nowrap
-                      transition-colors
+                      flex items-center gap-1.5 lg:gap-3 lg:w-full lg:justify-between
+                      px-2.5 py-1.5 lg:px-3 lg:py-2 rounded-full lg:rounded-md
+                      text-xs lg:text-sm whitespace-nowrap transition-colors
                       ${active
                         ? "bg-gold-400/10 text-ink border border-gold-400/40"
-                        : "text-ink-muted hover:text-ink hover:bg-white/5 border border-transparent"}
+                        : "text-ink-muted hover:text-ink hover:bg-white/5 border border-line lg:border-transparent"}
                     `}
                   >
                     <span>{f.label}</span>

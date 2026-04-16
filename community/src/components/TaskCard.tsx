@@ -90,24 +90,24 @@ export function TaskCard({
 
   return (
     <div className={`
-      group rounded-xl border p-4 sm:p-5 transition-colors
+      group rounded-xl border p-3 sm:p-5 transition-colors
       ${status === "done" || status === "today"
         ? "border-emerald-500/30 bg-emerald-500/[0.04]"
         : "border-line bg-bg-surface/40 hover:border-gold-400/40"}
     `}>
-      <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
+      <div className="space-y-3 sm:space-y-0 sm:flex sm:items-start sm:gap-4">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-[10px] uppercase tracking-[0.2em] px-2 py-0.5 rounded-full border ${KIND_TONE[task.kind]}`}>
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            <span className={`text-[9px] sm:text-[10px] uppercase tracking-[0.2em] px-1.5 sm:px-2 py-0.5 rounded-full border ${KIND_TONE[task.kind]}`}>
               {KIND_LABEL[task.kind]}
             </span>
-            <span className="font-display text-gold-400 text-sm tabular">
+            <span className="font-display text-gold-400 text-xs sm:text-sm tabular">
               +{task.points.toLocaleString()} pts
             </span>
-            {isDaily && <span className="text-[10px] text-ink-faint uppercase tracking-[0.2em]">Daily</span>}
+            {isDaily && <span className="text-[9px] sm:text-[10px] text-ink-faint uppercase tracking-[0.2em]">Daily</span>}
           </div>
-          <h3 className="mt-2 font-medium text-ink leading-tight">{task.title}</h3>
-          <p className="mt-1 text-sm text-ink-muted leading-relaxed">{task.description}</p>
+          <h3 className="mt-1.5 sm:mt-2 font-medium text-ink text-sm sm:text-base leading-tight">{task.title}</h3>
+          <p className="mt-1 text-xs sm:text-sm text-ink-muted leading-relaxed">{task.description}</p>
 
           {/* Progress bar — only on trade/mine tier tasks where we know
               the threshold and have a live USDC volume number. */}
@@ -124,7 +124,7 @@ export function TaskCard({
           )}
         </div>
 
-        <div className="shrink-0">
+        <div className="shrink-0 sm:self-start">
           {status === "done" || status === "today" ? (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-xs">
               <Check /> {status === "today" ? "Today" : "Claimed"}
