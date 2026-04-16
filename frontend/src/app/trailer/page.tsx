@@ -134,13 +134,7 @@ export default function Trailer() {
     setConverting(true);
     setConvertMsg("Loading converter…");
     try {
-      // Packages resolve at Vercel build time; suppress local type-
-      // checker here since the junctioned node_modules is missing
-      // them in this dev environment. Runtime behavior is covered
-      // by the try/catch.
-      // @ts-expect-error - resolved at build time via Vercel install
       const ff = await import("@ffmpeg/ffmpeg");
-      // @ts-expect-error - resolved at build time via Vercel install
       const util = await import("@ffmpeg/util");
       const ffmpeg = new ff.FFmpeg();
       ffmpeg.on("log", (evt: { message: string }) => {
