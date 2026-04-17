@@ -5,6 +5,24 @@ import { HomeHeroTicker } from "@/components/HomeHeroTicker";
 export default function Home() {
   return (
     <div className="space-y-24">
+      {/* ───────── Season 1 banner ───────── */}
+      <a
+        href="https://community.dogeforge.fun"
+        className="
+          block -mx-4 sm:-mx-6 -mt-4 px-4 sm:px-6 py-3
+          bg-gradient-to-r from-gold-400/10 via-gold-400/20 to-gold-400/10
+          border-b border-gold-400/30
+          text-center text-sm text-ink
+          hover:from-gold-400/15 hover:via-gold-400/25 hover:to-gold-400/15
+          transition-colors
+        "
+      >
+        <span className="text-gold-300 font-medium">Season 1 is live</span>
+        <span className="mx-2 text-ink-faint">·</span>
+        <span className="text-ink-muted">Earn points. Trade, mine, claim your .fdoge identity.</span>
+        <span className="ml-2 text-gold-400">Join →</span>
+      </a>
+
       {/* ───────── Hero ───────── */}
       <section className="pt-10 pb-4">
         <p className="text-xs uppercase tracking-[0.28em] text-gold-400/80 mb-6">
