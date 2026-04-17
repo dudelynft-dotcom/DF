@@ -63,8 +63,8 @@ export function LiveStats() {
     async function loadMiners() {
       try {
         const head = await c.getBlockNumber();
-        const SCAN_DEPTH = 500_000n;
-        const RANGE      = 10_000n;
+        const SCAN_DEPTH = 1_500_000n;
+        const RANGE      = 9_999n; // Arc RPC caps getLogs at 10k blocks
         const fromBase   = head > SCAN_DEPTH ? head - SCAN_DEPTH : 0n;
         const unique = new Set<string>();
         for (let f = fromBase; f <= head; f += RANGE + 1n) {
