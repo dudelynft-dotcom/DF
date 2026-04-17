@@ -173,7 +173,9 @@ const SEED = [
   // --- Social (one-time) ---
   { slug: "follow-x",        kind: "social", title: "Follow @DogeForgefun on X", description: "Follow the official DOGE FORGE account.", points: 100, max: 1, payload: '{"handle":"DogeForgefun","url":"https://x.com/DogeForgefun"}', sort: 10 },
   { slug: "retweet-launch",  kind: "social", title: "Retweet the launch post",     description: "Retweet our pinned launch announcement.", points: 75,  max: 1, payload: '{}',                        sort: 12 },
-  { slug: "join-tg-channel", kind: "social", title: "Join the official Telegram channel", description: "Announcements channel. Link your Telegram first; we verify membership on-chain via bot.", points: 100, max: 1, payload: '{"chat":"@DogeForgeAnn","url":"https://t.me/DogeForgeAnn"}', sort: 13 },
+  { slug: "comment-launch",  kind: "social", title: "Comment on the launch post",  description: "Drop a comment on the pinned launch tweet. Show some love.", points: 50, max: 1, payload: '{"trustBased":true,"url":"https://x.com/DogeForgeFun/status/2044712933339390057"}', sort: 13 },
+  { slug: "quote-launch",    kind: "social", title: "Quote tweet with your thoughts", description: "Quote tweet the launch post and share what excites you about DOGE FORGE.", points: 100, max: 1, payload: '{"trustBased":true,"url":"https://x.com/DogeForgeFun/status/2044712933339390057"}', sort: 14 },
+  { slug: "join-tg-channel", kind: "social", title: "Join the official Telegram channel", description: "Announcements channel. Link your Telegram first; we verify membership on-chain via bot.", points: 100, max: 1, payload: '{"chat":"@DogeForgeAnn","url":"https://t.me/DogeForgeAnn"}', sort: 15 },
   { slug: "join-tg-group",   kind: "social", title: "Join the Telegram community",        description: "Community chat. Link Telegram first; verified via bot, no self-attest.",                points: 75,  max: 1, payload: '{"chat":"@dogeforge","url":"https://t.me/dogeforge"}',    sort: 14 },
 
   // --- Trade volume tiers ---
