@@ -13,13 +13,25 @@ export function LiveStats() {
   const client = usePublicClient();
   const [miners, setMiners] = useState<number | null>(null);
 
+  // Read USDC balance of every protocol contract to compute TVL.
+  // Split into Mining TVL (Miner + LiquidityManager pipeline) and
+  // LP TVL (all pair contracts holding USDC).
+  const CDOGE_PAIR  = "0x152B8a54835Ac5853ec449B60DCAB55da3A355DD" as `0x${string}`;
+  const EURC_PAIR   = "0xa699a07e68fe465d684374af02fe6105b18b5209" as `0x${string}`;
+  const WUSDC_PAIR  = "0xfb75dee2cf4fb4c4cdd3486fc28a4fd9d13a3a2a" as `0x${string}`;
+
   const { data } = useReadContracts({
     contracts: [
       { address: addresses.miner,   abi: minerAbi, functionName: "totalFlowed", chainId: tempo.id },
       { address: addresses.doge,    abi: erc20Abi, functionName: "totalSupply", chainId: tempo.id },
+      // Mining pipeline
       { address: addresses.pathUSD, abi: erc20Abi, functionName: "balanceOf",   args: [addresses.miner],            chainId: tempo.id },
       { address: addresses.pathUSD, abi: erc20Abi, functionName: "balanceOf",   args: [addresses.liquidityManager], chainId: tempo.id },
+      // LP pairs (USDC side)
       { address: addresses.pathUSD, abi: erc20Abi, functionName: "balanceOf",   args: [addresses.pair],             chainId: tempo.id },
+      { address: addresses.pathUSD, abi: erc20Abi, functionName: "balanceOf",   args: [CDOGE_PAIR],                 chainId: tempo.id },
+      { address: addresses.pathUSD, abi: erc20Abi, functionName: "balanceOf",   args: [EURC_PAIR],                  chainId: tempo.id },
+      { address: addresses.pathUSD, abi: erc20Abi, functionName: "balanceOf",   args: [WUSDC_PAIR],                 chainId: tempo.id },
     ],
     allowFailure: true,
     query: { refetchInterval: 15_000 },
@@ -29,10 +41,20 @@ export function LiveStats() {
   const totalMined  = data?.[1]?.result as bigint | undefined;
   const minerBal    = data?.[2]?.result as bigint | undefined;
   const lmBal       = data?.[3]?.result as bigint | undefined;
-  const pairBal     = data?.[4]?.result as bigint | undefined;
-  const tvl = (minerBal !== undefined && lmBal !== undefined && pairBal !== undefined)
-    ? minerBal + lmBal + pairBal
-    : undefined;
+  const fdogePairBal = data?.[4]?.result as bigint | undefined;
+  const cdogePairBal = data?.[5]?.result as bigint | undefined;
+  const eurcPairBal  = data?.[6]?.result as bigint | undefined;
+  const wusdcPairBal = data?.[7]?.result as bigint | undefined;
+
+  const miningTvl = (minerBal !== undefined && lmBal !== undefined)
+    ? minerBal + lmBal : undefined;
+  const lpTvl = [fdogePairBal, cdogePairBal, eurcPairBal, wusdcPairBal]
+    .reduce<bigint | undefined>((sum, v) => {
+      if (v === undefined) return sum;
+      return (sum ?? 0n) + v;
+    }, undefined);
+  const tvl = (miningTvl !== undefined || lpTvl !== undefined)
+    ? (miningTvl ?? 0n) + (lpTvl ?? 0n) : undefined;
 
   useEffect(() => {
     if (!client) return;
@@ -78,12 +100,22 @@ export function LiveStats() {
       <p className="text-xs uppercase tracking-[0.28em] text-gold-400/80 mb-6">
         Protocol metrics
       </p>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-px bg-line rounded-xl overflow-hidden">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-line rounded-xl overflow-hidden">
         <StatTile
-          label="TVL"
+          label="Total TVL"
           value={tvl !== undefined ? fmt(tvl, PATHUSD_DECIMALS) : "-"}
           unit="USDC locked across protocol"
           emphasis
+        />
+        <StatTile
+          label="Mining TVL"
+          value={miningTvl !== undefined ? fmt(miningTvl, PATHUSD_DECIMALS) : "-"}
+          unit="Miner + LiquidityManager"
+        />
+        <StatTile
+          label="LP TVL"
+          value={lpTvl !== undefined ? fmt(lpTvl, PATHUSD_DECIMALS) : "-"}
+          unit="USDC across all pools"
         />
         <StatTile
           label="USDC Converted"
