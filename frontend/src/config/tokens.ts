@@ -24,6 +24,16 @@ const RAW_CURATED: Array<CuratedToken | null> = [
     description: "The native mining reward of DOGE FORGE. 210M supply cap.",
     iconUrl: "/doge.png",
   } : null,
+  // cDOGE — right after fDOGE so it's the second token in every view.
+  ...(process.env.NEXT_PUBLIC_CDOGE_ADDRESS ? [{
+    address: process.env.NEXT_PUBLIC_CDOGE_ADDRESS as `0x${string}`,
+    symbol:  "cDOGE",
+    name:    "Community Doge",
+    decimals: 18,
+    kind:    "project" as const,
+    description: "Season 1 community token. 100M fixed supply, no fee, no inflation.",
+    iconUrl: "/cdoge-icon.png",
+  }] : []),
   addresses.usdc ? {
     address: addresses.usdc,
     symbol:  "USDC",
@@ -62,15 +72,6 @@ const RAW_CURATED: Array<CuratedToken | null> = [
     description: "UnitFlow's wrapped USDC for AMM pool routing.",
     iconUrl: "https://assets.coingecko.com/coins/images/6319/small/usdc.png",
   },
-  // cDOGE — Community Doge. Appears only after NEXT_PUBLIC_CDOGE_ADDRESS is set.
-  ...(process.env.NEXT_PUBLIC_CDOGE_ADDRESS ? [{
-    address: process.env.NEXT_PUBLIC_CDOGE_ADDRESS as `0x${string}`,
-    symbol:  "cDOGE",
-    name:    "Community Doge",
-    decimals: 18,
-    kind:    "project" as const,
-    description: "Season 1 community token. 100M fixed supply, no fee, no inflation.",
-  }] : []),
 ];
 
 export const CURATED_TOKENS: CuratedToken[] = RAW_CURATED.filter(
