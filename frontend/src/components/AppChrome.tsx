@@ -11,6 +11,7 @@ const FULL_BLEED_PATHS = new Set([
 const NAV = [
   { href: "/mine",        label: "Mine" },
   { href: "/trade",       label: "Trade" },
+  { href: "/pool",        label: "Pool" },
   { href: "/id",          label: "Identity" },
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/portfolio",   label: "Portfolio" },
