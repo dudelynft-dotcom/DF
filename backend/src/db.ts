@@ -193,6 +193,9 @@ const SEED = [
   // --- Identity ---
   { slug: "claim-fdoge-name", kind: "identity", title: "Claim your .fdoge identity", description: "Register your on-chain name at TdogeNames.", points: 300, max: 1, payload: '{}', sort: 40 },
 
+  // --- Liquidity ---
+  { slug: "provide-cdoge-lp", kind: "trade", title: "Provide cDOGE/USDC liquidity", description: "Add liquidity to the cDOGE/USDC pool on the Pool page. Earn 0.30% on every swap.", points: 200, max: 1, payload: '{"trustBased":true,"url":"https://dogeforge.fun/pool"}', sort: 42 },
+
   // --- Daily + streak ---
   { slug: "daily-tweet",   kind: "daily", title: "Daily tweet",    description: "Tweet about DOGE FORGE daily with $FDOGE and @DogeForgefun. 1 per day.", points: 100, max: -1, payload: '{"requireTokens":["$FDOGE","@DogeForgefun"]}', sort: 50 },
   { slug: "daily-checkin", kind: "daily", title: "Daily check-in", description: "Open the app daily. 7-day streak = +50 bonus, 30-day = +500.",            points: 5,  max: -1, payload: '{}',                                           sort: 51 },
