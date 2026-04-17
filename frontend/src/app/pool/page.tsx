@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import {
-  useAccount, usePublicClient, useWriteContract, useWaitForTransactionReceipt,
+  useAccount, useWriteContract,
   useReadContract, useReadContracts,
 } from "wagmi";
 import { formatUnits, parseUnits, maxUint256, type Address } from "viem";
@@ -10,10 +10,15 @@ import { arc, addresses, USDC_DECIMALS, DOGE_DECIMALS } from "@/config/chain";
 import { forgeRouterAbi, forgeFactoryAbi, pairAbi } from "@/lib/dexAbis";
 import { erc20Abi } from "@/lib/abis";
 
-// Curated pairs for the pool page. Same set as the trade page.
-// In future you could read allPairs from the factory; for now a
-// fixed list avoids an RPC round-trip and lets us attach metadata.
-const POOLS: {
+// Curated pairs for the pool page. fDOGE/USDC is intentionally
+// excluded — its liquidity is protocol-managed via LiquidityManager
+// so user LP would interfere with the auto-deepening model.
+//
+// cDOGE address is env-driven; if not set, the cDOGE pairs simply
+// don't render (graceful degradation before deploy).
+const CDOGE = (process.env.NEXT_PUBLIC_CDOGE_ADDRESS ?? "") as Address;
+
+type PoolDef = {
   name: string;
   tokenA: Address;
   tokenB: Address;
@@ -21,13 +26,48 @@ const POOLS: {
   symbolB: string;
   decimalsA: number;
   decimalsB: number;
-}[] = [
+};
+
+const POOLS: PoolDef[] = [
+  // Stablecoin pairs
   {
-    name: "fDOGE / USDC",
-    tokenA: addresses.doge, tokenB: addresses.usdc,
-    symbolA: "fDOGE", symbolB: "USDC",
-    decimalsA: DOGE_DECIMALS, decimalsB: USDC_DECIMALS,
+    name: "EURC / USDC",
+    tokenA: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a" as Address,
+    tokenB: addresses.usdc,
+    symbolA: "EURC", symbolB: "USDC",
+    decimalsA: 6, decimalsB: USDC_DECIMALS,
   },
+  {
+    name: "WUSDC / USDC",
+    tokenA: addresses.wusdc,
+    tokenB: addresses.usdc,
+    symbolA: "WUSDC", symbolB: "USDC",
+    decimalsA: 18, decimalsB: USDC_DECIMALS,
+  },
+  {
+    name: "USYC / USDC",
+    tokenA: "0xe9185F0c5F296Ed1797AaE4238D26CCaBEadb86C" as Address,
+    tokenB: addresses.usdc,
+    symbolA: "USYC", symbolB: "USDC",
+    decimalsA: 18, decimalsB: USDC_DECIMALS,
+  },
+  // cDOGE pairs — appear only after NEXT_PUBLIC_CDOGE_ADDRESS is set.
+  ...(CDOGE ? [
+    {
+      name: "cDOGE / USDC",
+      tokenA: CDOGE,
+      tokenB: addresses.usdc,
+      symbolA: "cDOGE", symbolB: "USDC",
+      decimalsA: 18, decimalsB: USDC_DECIMALS,
+    } satisfies PoolDef,
+    {
+      name: "cDOGE / EURC",
+      tokenA: CDOGE,
+      tokenB: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a" as Address,
+      symbolA: "cDOGE", symbolB: "EURC",
+      decimalsA: 18, decimalsB: 6,
+    } satisfies PoolDef,
+  ] : []),
 ];
 
 const ROUTER = addresses.forgeRouter;
@@ -42,7 +82,6 @@ const SLIPPAGE_BPS = 100n; // 1%
 export default function PoolPage() {
   const { address, isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
-  const pub = usePublicClient({ chainId: arc.id });
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [tab, setTab] = useState<"add" | "remove">("add");
 
@@ -172,7 +211,7 @@ export default function PoolPage() {
       {/* Add / Remove panels */}
       {tab === "add" ? (
         <AddLiquidity
-          pool={pool} pair={pair} hasPair={!!hasPair}
+          pool={pool}
           reserveA={reserveA} reserveB={reserveB}
           balA={balA} balB={balB} allowA={allowA} allowB={allowB}
           isConnected={isConnected} address={address}
@@ -180,7 +219,7 @@ export default function PoolPage() {
         />
       ) : (
         <RemoveLiquidity
-          pool={pool} pair={pair} hasPair={!!hasPair}
+          pool={pool} pair={pair}
           reserveA={reserveA} reserveB={reserveB} totalLP={totalLP}
           userLP={userLP} lpAllowance={lpAllowance}
           isConnected={isConnected} address={address}
@@ -198,10 +237,10 @@ export default function PoolPage() {
 type PoolMeta = typeof POOLS[number];
 
 function AddLiquidity({
-  pool, pair, hasPair, reserveA, reserveB, balA, balB, allowA, allowB,
+  pool, reserveA, reserveB, balA, balB, allowA, allowB,
   isConnected, address, refetch,
 }: {
-  pool: PoolMeta; pair: Address | undefined; hasPair: boolean;
+  pool: PoolMeta;
   reserveA: bigint; reserveB: bigint;
   balA: bigint; balB: bigint; allowA: bigint; allowB: bigint;
   isConnected: boolean; address: Address | undefined;
@@ -334,10 +373,10 @@ function AddLiquidity({
 // ============================================================
 
 function RemoveLiquidity({
-  pool, pair, hasPair, reserveA, reserveB, totalLP, userLP, lpAllowance,
+  pool, pair, reserveA, reserveB, totalLP, userLP, lpAllowance,
   isConnected, address, refetch,
 }: {
-  pool: PoolMeta; pair: Address | undefined; hasPair: boolean;
+  pool: PoolMeta; pair: Address | undefined;
   reserveA: bigint; reserveB: bigint; totalLP: bigint;
   userLP: bigint; lpAllowance: bigint;
   isConnected: boolean; address: Address | undefined;
