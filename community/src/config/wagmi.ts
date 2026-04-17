@@ -1,4 +1,4 @@
-import { createConfig, http } from "wagmi";
+import { createConfig, createStorage, http } from "wagmi";
 import { connectorsForWallets } from "@rainbow-me/rainbowkit";
 import { injectedWallet, metaMaskWallet, coinbaseWallet, rabbyWallet } from "@rainbow-me/rainbowkit/wallets";
 import { arc } from "./chain";
@@ -32,5 +32,5 @@ export const wagmiConfig = createConfig({
   chains: [arc],
   connectors,
   transports: { [arc.id]: http(arc.rpcUrls.default.http[0]) },
-  ssr: true,
+  storage: createStorage({ storage: typeof window !== "undefined" ? window.localStorage : undefined }),
 });

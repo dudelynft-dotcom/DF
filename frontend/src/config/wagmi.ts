@@ -1,4 +1,4 @@
-import { createConfig, http } from "wagmi";
+import { createConfig, createStorage, http } from "wagmi";
 import { connectorsForWallets } from "@rainbow-me/rainbowkit";
 import {
   metaMaskWallet,
@@ -44,5 +44,8 @@ export const wagmiConfig = createConfig({
   transports: {
     [arc.id]: http(arc.rpcUrls.default.http[0]),
   },
-  ssr: true,
+  // Force localStorage persistence so wallet sessions survive page
+  // refreshes. The default `ssr: true` uses cookie storage which
+  // loses state without initialState wiring.
+  storage: createStorage({ storage: typeof window !== "undefined" ? window.localStorage : undefined }),
 });
