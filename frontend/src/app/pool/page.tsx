@@ -6,7 +6,7 @@ import {
 } from "wagmi";
 import { formatUnits, parseUnits, maxUint256, type Address } from "viem";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
-import { arc, addresses, USDC_DECIMALS, DOGE_DECIMALS } from "@/config/chain";
+import { arc, addresses, USDC_DECIMALS } from "@/config/chain";
 import { forgeRouterAbi, forgeFactoryAbi, pairAbi } from "@/lib/dexAbis";
 import { erc20Abi } from "@/lib/abis";
 
@@ -51,7 +51,9 @@ const POOLS: PoolDef[] = [
     symbolA: "USYC", symbolB: "USDC",
     decimalsA: 18, decimalsB: USDC_DECIMALS,
   },
-  // cDOGE pairs — appear only after NEXT_PUBLIC_CDOGE_ADDRESS is set.
+  // cDOGE/USDC — the only cDOGE pair with a trading interface.
+  // cDOGE/EURC removed: no swap UI routes through it, so LP is
+  // dead capital with no fee income.
   ...(CDOGE ? [
     {
       name: "cDOGE / USDC",
@@ -59,13 +61,6 @@ const POOLS: PoolDef[] = [
       tokenB: addresses.usdc,
       symbolA: "cDOGE", symbolB: "USDC",
       decimalsA: 18, decimalsB: USDC_DECIMALS,
-    } satisfies PoolDef,
-    {
-      name: "cDOGE / EURC",
-      tokenA: CDOGE,
-      tokenB: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a" as Address,
-      symbolA: "cDOGE", symbolB: "EURC",
-      decimalsA: 18, decimalsB: 6,
     } satisfies PoolDef,
   ] : []),
 ];

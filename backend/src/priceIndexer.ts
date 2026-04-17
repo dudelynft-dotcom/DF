@@ -44,6 +44,7 @@ const TRACKED_TOKENS = (process.env.TRACKED_TOKENS ??
     "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a", // EURC
     "0xe9185F0c5F296Ed1797AaE4238D26CCaBEadb86C", // USYC
     "0x911b4000D3422F482F4062a913885f7b035382Df", // WUSDC
+    "0x6a98458cA742012d70DA2A494424d28097430Eed", // cDOGE
   ].join(",")
 ).split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 
