@@ -29,13 +29,14 @@ contract DeployCDoge is Script {
         address usdc   = vm.envOr("USDC_ADDRESS", address(0x3600000000000000000000000000000000000000));
         address eurc   = vm.envOr("EURC_ADDRESS", address(0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a));
 
-        // Seed amounts — adjust to taste. 10M cDOGE + $10k USDC sets
-        // an opening price of ~$0.001 per cDOGE. Low so the community
-        // can accumulate cheaply.
-        uint256 cdogeSeedUsdc = 10_000_000 ether;    // 10M cDOGE
-        uint256 usdcSeed      = 10_000 * 1e6;        // $10k USDC (6 dec)
-        uint256 cdogeSeedEurc = 5_000_000 ether;     // 5M cDOGE
-        uint256 eurcSeed      = 5_000 * 1e6;         // $5k EURC (6 dec)
+        // Seed amounts — sized for testnet admin's current balance
+        // (~285 USDC, ~20 EURC). Opening price ~$0.0001/cDOGE so
+        // the community can accumulate cheaply. Increase via
+        // addLiquidity once faucet USDC tops up.
+        uint256 cdogeSeedUsdc = 1_000_000 ether;     // 1M cDOGE
+        uint256 usdcSeed      = 100 * 1e6;           // $100 USDC (6 dec)
+        uint256 cdogeSeedEurc = 500_000 ether;        // 500k cDOGE
+        uint256 eurcSeed      = 10 * 1e6;            // $10 EURC (6 dec)
 
         vm.startBroadcast(pk);
 
