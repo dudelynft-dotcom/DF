@@ -29,13 +29,13 @@ type RawCommit = {
 
 type Window = "24h" | "7d" | "all";
 
-// Arc Atlantic average block time ≈ 2s. Windows are approximate — blocks that
-// slip across a boundary don't materially change rankings.
-const BLOCKS_PER_DAY = 43_200n;
+// Arc block time ≈ 0.5-1s. Windows are approximate.
+// Reduced scan depths and larger chunk sizes for faster loading.
+const BLOCKS_PER_DAY = 86_400n; // ~1 block/sec on Arc
 const WINDOW_BLOCKS: Record<Window, bigint> = {
   "24h": BLOCKS_PER_DAY,
   "7d":  BLOCKS_PER_DAY * 7n,
-  "all": BLOCKS_PER_DAY * 30n, // scan depth cap
+  "all": BLOCKS_PER_DAY * 7n, // cap "all" at 7 days for performance; testnet activity is recent
 };
 
 export default function LeaderboardPage() {
@@ -61,8 +61,8 @@ export default function LeaderboardPage() {
     async function load() {
       try {
         const headNow = await c.getBlockNumber();
-        const SCAN_DEPTH = WINDOW_BLOCKS["all"];
-        const RANGE      = 10_000n;
+        const SCAN_DEPTH = WINDOW_BLOCKS[window];
+        const RANGE      = 50_000n; // Arc RPC handles larger ranges well
         const fromBase   = headNow > SCAN_DEPTH ? headNow - SCAN_DEPTH : 0n;
 
         type LogChunk = Awaited<ReturnType<typeof c.getLogs<typeof committedEvent>>>;

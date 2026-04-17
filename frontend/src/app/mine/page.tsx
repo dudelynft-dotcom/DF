@@ -274,7 +274,22 @@ export default function MinePage() {
           })}
         </div>
 
-        <div className="mt-5 flex items-stretch gap-3">
+        <div className="mt-5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-ink-faint">Amount (USDC)</span>
+            <span className="text-xs text-ink-faint">
+              Balance: <span className="text-ink tabular">{bal !== undefined ? fmtUsd(bal) : "-"}</span>
+              {bal !== undefined && bal > 0n && (
+                <button
+                  onClick={() => setAmount(fmtUsd(bal))}
+                  className="ml-2 text-gold-300 hover:text-gold-200"
+                >
+                  Max
+                </button>
+              )}
+            </span>
+          </div>
+          <div className="flex items-stretch gap-3">
           <input
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
@@ -305,6 +320,7 @@ export default function MinePage() {
               {txBusy === "commit" ? "Opening…" : `Open · ${HARVEST_MODES[selectedMode].boost}`}
             </button>
           )}
+        </div>
         </div>
 
         {exceedsWallet && amount && (
