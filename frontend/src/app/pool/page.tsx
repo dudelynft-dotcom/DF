@@ -6,13 +6,13 @@ import {
 } from "wagmi";
 import { formatUnits, parseUnits, maxUint256, type Address } from "viem";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
-import { arc, addresses, USDC_DECIMALS } from "@/config/chain";
+import { arc, addresses, USDC_DECIMALS, DOGE_DECIMALS } from "@/config/chain";
 import { forgeRouterAbi, forgeFactoryAbi, pairAbi } from "@/lib/dexAbis";
 import { erc20Abi } from "@/lib/abis";
 
-// Curated pairs for the pool page. fDOGE/USDC is intentionally
-// excluded — its liquidity is protocol-managed via LiquidityManager
-// so user LP would interfere with the auto-deepening model.
+// Curated pairs for the pool page. fDOGE/USDC sits alongside the
+// protocol-owned liquidity from the LiquidityManager — public LP
+// earns the 0.30% swap fee pro-rata with protocol LP.
 //
 // cDOGE address is env-driven; if not set, the cDOGE pairs simply
 // don't render (graceful degradation before deploy).
@@ -29,6 +29,14 @@ type PoolDef = {
 };
 
 const POOLS: PoolDef[] = [
+  // Protocol's flagship pair — public LP alongside protocol-owned liquidity.
+  {
+    name: "fDOGE / USDC",
+    tokenA: addresses.doge,
+    tokenB: addresses.usdc,
+    symbolA: "fDOGE", symbolB: "USDC",
+    decimalsA: DOGE_DECIMALS, decimalsB: USDC_DECIMALS,
+  },
   // Stablecoin pairs
   {
     name: "EURC / USDC",
