@@ -300,7 +300,7 @@ function AddLiquidity({
     setErr(null);
     const minA = parsedA - (parsedA * SLIPPAGE_BPS) / 10000n;
     const minB = parsedB - (parsedB * SLIPPAGE_BPS) / 10000n;
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
     try {
       await writeContractAsync({
         address: ROUTER, abi: forgeRouterAbi, functionName: "addLiquidity",
@@ -412,7 +412,7 @@ function RemoveLiquidity({
     setErr(null);
     const minA = estA - (estA * SLIPPAGE_BPS) / 10000n;
     const minB = estB - (estB * SLIPPAGE_BPS) / 10000n;
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
     try {
       await writeContractAsync({
         address: ROUTER, abi: forgeRouterAbi, functionName: "removeLiquidity",

@@ -118,7 +118,11 @@ export function SwapForm({
 
   function onSwap() {
     if (!address || !parsedIn || !routeAvailable) return;
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
+    // 20-minute deadline. Short deadlines revert as ExpiredDeadline() when
+    // the wallet/user stalls, the mempool delays inclusion, or the user's
+    // clock is slightly behind the chain. Slippage still protects price;
+    // the deadline is about liveness, not safety.
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
     doTx("swap",
       { address: addresses.forgeRouter, abi: forgeRouterAbi, functionName: "swapExactTokensForTokens",
         args: [parsedIn, minOut, [from.address, to.address] as const, address, deadline] },

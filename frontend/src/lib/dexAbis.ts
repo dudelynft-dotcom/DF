@@ -14,6 +14,17 @@ export const pairAbi = [
       { name: "blockTimestampLast", type: "uint32" },
     ],
   },
+  // Custom errors that bubble up through routed swaps/LP ops.
+  { type: "error", name: "InsufficientLiquidityMinted", inputs: [] },
+  { type: "error", name: "InsufficientLiquidityBurned", inputs: [] },
+  { type: "error", name: "InsufficientInputAmount",     inputs: [] },
+  { type: "error", name: "InsufficientOutputAmount",    inputs: [] },
+  { type: "error", name: "InsufficientLiquidity",       inputs: [] },
+  { type: "error", name: "InvalidTo",                   inputs: [] },
+  { type: "error", name: "KInvariant",                  inputs: [] },
+  { type: "error", name: "ReserveOverflow",             inputs: [] },
+  { type: "error", name: "IdenticalTokens",             inputs: [] },
+  { type: "error", name: "ZeroAddress",                 inputs: [] },
 ] as const;
 
 export const routerAbi = [
@@ -136,6 +147,38 @@ export const forgeRouterAbi = [
       { name: "amountB", type: "uint256" },
     ],
   },
+  // Custom-error declarations. Viem needs these in the ABI to decode a
+  // revert's selector into an error name. Without them, reverts surface
+  // as raw bytes / "unknown reason" in the UI. Mirrors ForgeRouter.sol.
+  { type: "error", name: "ExpiredDeadline",          inputs: [] },
+  { type: "error", name: "BadPath",                  inputs: [] },
+  { type: "error", name: "ZeroAmount",               inputs: [] },
+  { type: "error", name: "InsufficientOutputAmount", inputs: [] },
+  { type: "error", name: "InsufficientInputAmount",  inputs: [] },
+  { type: "error", name: "InsufficientAAmount",      inputs: [] },
+  { type: "error", name: "InsufficientBAmount",      inputs: [] },
+  { type: "error", name: "PairMissing",              inputs: [] },
+  { type: "error", name: "PairNotWhitelisted",       inputs: [] },
+  { type: "error", name: "FeeTooHigh",               inputs: [] },
+  { type: "error", name: "ZeroAddress",              inputs: [] },
+  // Errors bubbled up from TdogePair when routed through the router.
+  { type: "error", name: "InsufficientLiquidity",       inputs: [] },
+  { type: "error", name: "InsufficientLiquidityMinted", inputs: [] },
+  { type: "error", name: "InsufficientLiquidityBurned", inputs: [] },
+  { type: "error", name: "KInvariant",                  inputs: [] },
+  { type: "error", name: "InvalidTo",                   inputs: [] },
+  { type: "error", name: "ReserveOverflow",             inputs: [] },
+  // Standard OZ errors bubbled up from the underlying ERC20s.
+  { type: "error", name: "ERC20InsufficientBalance",   inputs: [
+    { name: "sender",  type: "address" },
+    { name: "balance", type: "uint256" },
+    { name: "needed",  type: "uint256" },
+  ]},
+  { type: "error", name: "ERC20InsufficientAllowance", inputs: [
+    { name: "spender",   type: "address" },
+    { name: "allowance", type: "uint256" },
+    { name: "needed",    type: "uint256" },
+  ]},
 ] as const;
 
 /// UnitFlow V2.5 — legacy ABI retained for compat while we migrate. Safe to
