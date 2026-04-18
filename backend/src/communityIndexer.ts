@@ -31,6 +31,7 @@ const client = createPublicClient({ chain: arc, transport: http() });
 const ROUTER = (process.env.FORGE_ROUTER_ADDRESS ?? "0xffBD254859EbF9fC4808410f95f8C4E7998846fB").toLowerCase() as `0x${string}`;
 const MINER  = (process.env.MINER_ADDRESS         ?? "0x1574EEA1DA5e204CC035968D480aE51BF6505834").toLowerCase() as `0x${string}`;
 const USDC   = (process.env.USDC_ADDRESS          ?? "0x3600000000000000000000000000000000000000").toLowerCase() as `0x${string}`;
+const FDOGE  = (process.env.FDOGE_ADDRESS         ?? "").toLowerCase();
 
 const POLL_MS = Number(process.env.COMMUNITY_POLL_MS ?? 12_000);
 const RANGE   = BigInt(process.env.COMMUNITY_RANGE   ?? 500); // blocks per poll
@@ -92,6 +93,27 @@ function addTradeVolume(wallet: string, usdcWei: bigint) {
     ).run(w, usdcWei.toString(), now);
   }
 }
+function addFdogeBought(wallet: string, fdogeWei: bigint) {
+  if (fdogeWei <= 0n) return;
+  const w = wallet.toLowerCase();
+  const now = Math.floor(Date.now() / 1000);
+  const row = db.prepare(
+    `SELECT fdoge_bought_total FROM community_fdoge_buys WHERE wallet = ?`
+  ).get(w) as { fdoge_bought_total?: string } | undefined;
+  if (row) {
+    const total = parseWei(row.fdoge_bought_total) + fdogeWei;
+    db.prepare(
+      `UPDATE community_fdoge_buys
+         SET fdoge_bought_total = ?, buy_count = buy_count + 1, updated_at = ?
+       WHERE wallet = ?`
+    ).run(total.toString(), now, w);
+  } else {
+    db.prepare(
+      `INSERT INTO community_fdoge_buys (wallet, fdoge_bought_total, buy_count, updated_at)
+       VALUES (?, ?, 1, ?)`
+    ).run(w, fdogeWei.toString(), now);
+  }
+}
 function addMineVolume(wallet: string, usdcWei: bigint) {
   if (usdcWei <= 0n) return;
   const w = wallet.toLowerCase();
@@ -136,6 +158,13 @@ async function pollSwaps(head: bigint) {
     else if (a.tokenOut.toLowerCase() === USDC) usdc = a.amountOut ?? 0n;
     // Multi-hop without a USDC endpoint is skipped (rare on our pairs).
     addTradeVolume(a.user, usdc);
+
+    // If the swap ended at fDOGE, credit the user's buy total. Works for
+    // both direct USDC→fDOGE and multi-hop routes — router emits Swap
+    // with the route's endpoints, so tokenOut reflects what the user received.
+    if (FDOGE && a.tokenOut.toLowerCase() === FDOGE) {
+      addFdogeBought(a.user, a.amountOut ?? 0n);
+    }
   }
 
   setCursor("forge_router_swap", to);

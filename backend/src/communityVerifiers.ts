@@ -403,6 +403,12 @@ function mineVolumeUsdcWei(wallet: string): bigint {
   ).get(wallet.toLowerCase()) as { usdc_committed_total: string } | undefined;
   return parseWei(row?.usdc_committed_total);
 }
+function fdogeBoughtWei(wallet: string): bigint {
+  const row = db.prepare(
+    `SELECT fdoge_bought_total FROM community_fdoge_buys WHERE wallet = ?`
+  ).get(wallet.toLowerCase()) as { fdoge_bought_total: string } | undefined;
+  return parseWei(row?.fdoge_bought_total);
+}
 
 function tradeVerifier(user: User, task: Task): VerifyResult {
   const payload = safeJson(task.payload) as { thresholdUsd?: number };
@@ -442,6 +448,29 @@ register("mine-500",   async (u, t) => mineVerifier(u, t));
 register("mine-1000",  async (u, t) => mineVerifier(u, t));
 register("mine-5000",  async (u, t) => mineVerifier(u, t));
 
+// Buy-fDOGE tiers. Threshold is whole fDOGE tokens (18 decimals).
+// Indexer aggregates per wallet whenever a Swap's tokenOut == FDOGE.
+function buyFdogeVerifier(user: User, task: Task): VerifyResult {
+  const payload = safeJson(task.payload) as { thresholdFdoge?: number };
+  const amt = Number(payload.thresholdFdoge ?? 0);
+  if (!amt) return { ok: false, reason: "bad_threshold" };
+  const need = BigInt(amt) * 10n ** 18n;
+  const have = fdogeBoughtWei(user.wallet);
+  if (have < need) {
+    return { ok: false, reason: "below_threshold", meta: {
+      progressFdoge:  Number(have / 10n ** 18n),
+      thresholdFdoge: amt,
+    } };
+  }
+  return { ok: true, points: task.points, proof: { fdogeBought: Number(have / 10n ** 18n) } };
+}
+register("buy-fdoge-10",    async (u, t) => buyFdogeVerifier(u, t));
+register("buy-fdoge-50",    async (u, t) => buyFdogeVerifier(u, t));
+register("buy-fdoge-100",   async (u, t) => buyFdogeVerifier(u, t));
+register("buy-fdoge-500",   async (u, t) => buyFdogeVerifier(u, t));
+register("buy-fdoge-1000",  async (u, t) => buyFdogeVerifier(u, t));
+register("buy-fdoge-10000", async (u, t) => buyFdogeVerifier(u, t));
+
 // Public helpers so /community/me can show progress bars without a
 // separate verification endpoint round-trip.
 export function getTradeVolumeUsd(wallet: string): number {
@@ -449,6 +478,9 @@ export function getTradeVolumeUsd(wallet: string): number {
 }
 export function getMineVolumeUsd(wallet: string): number {
   return Number(mineVolumeUsdcWei(wallet) / 1_000_000n);
+}
+export function getFdogeBought(wallet: string): number {
+  return Number(fdogeBoughtWei(wallet) / 10n ** 18n);
 }
 
 // ---------- helpers ----------

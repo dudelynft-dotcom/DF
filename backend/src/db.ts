@@ -150,6 +150,14 @@ CREATE TABLE IF NOT EXISTS community_mine_volume (
   position_count       INTEGER NOT NULL DEFAULT 0,
   updated_at           INTEGER NOT NULL
 );
+-- Running total of fDOGE bought per wallet. Populated when a Swap's
+-- tokenOut == FDOGE; amount stored as 18-decimal wei string.
+CREATE TABLE IF NOT EXISTS community_fdoge_buys (
+  wallet              TEXT PRIMARY KEY,
+  fdoge_bought_total  TEXT NOT NULL DEFAULT '0',
+  buy_count           INTEGER NOT NULL DEFAULT 0,
+  updated_at          INTEGER NOT NULL
+);
 
 -- Event cursors per (source, address). Independent from the existing
 -- indexer_cursor so the community indexer can run alongside.
@@ -198,6 +206,14 @@ const SEED = [
   { slug: "trade-1000",  kind: "trade", title: "Trade $1,000 volume", description: "Route $1,000 through the DOGE FORGE DEX on Arc testnet. Uses testnet USDC.", points: 500,  max: 1, payload: '{"thresholdUsd":1000}',  sort: 21 },
   { slug: "trade-5000",  kind: "trade", title: "Trade $5,000 volume", description: "Route $5,000 on Arc testnet. Get testnet USDC free at faucet.circle.com.", points: 1500, max: 1, payload: '{"thresholdUsd":5000}',  sort: 22 },
   { slug: "trade-25000", kind: "trade", title: "Trade $25,000 volume",description: "Whale tier: $25,000 total volume on Arc testnet.",         points: 5000, max: 1, payload: '{"thresholdUsd":25000}', sort: 23 },
+
+  // --- Buy fDOGE tiers (swap end-token = fDOGE, auto-detected on-chain) ---
+  { slug: "buy-fdoge-10",    kind: "trade", title: "Buy 10 fDOGE",     description: "Buy 10 fDOGE on the Trade page. Progress tracks automatically on-chain.",     points: 100,  max: 1, payload: '{"thresholdFdoge":10}',    sort: 24 },
+  { slug: "buy-fdoge-50",    kind: "trade", title: "Buy 50 fDOGE",     description: "Buy 50 fDOGE on the Trade page. Progress tracks automatically on-chain.",     points: 200,  max: 1, payload: '{"thresholdFdoge":50}',    sort: 25 },
+  { slug: "buy-fdoge-100",   kind: "trade", title: "Buy 100 fDOGE",    description: "Buy 100 fDOGE on the Trade page. Progress tracks automatically on-chain.",    points: 400,  max: 1, payload: '{"thresholdFdoge":100}',   sort: 26 },
+  { slug: "buy-fdoge-500",   kind: "trade", title: "Buy 500 fDOGE",    description: "Buy 500 fDOGE on the Trade page. Progress tracks automatically on-chain.",    points: 800,  max: 1, payload: '{"thresholdFdoge":500}',   sort: 27 },
+  { slug: "buy-fdoge-1000",  kind: "trade", title: "Buy 1,000 fDOGE",  description: "Buy 1,000 fDOGE on the Trade page. Progress tracks automatically on-chain.",  points: 1500, max: 1, payload: '{"thresholdFdoge":1000}',  sort: 28 },
+  { slug: "buy-fdoge-10000", kind: "trade", title: "Buy 10,000 fDOGE", description: "Buy 10,000 fDOGE on the Trade page. Progress tracks automatically on-chain.", points: 5000, max: 1, payload: '{"thresholdFdoge":10000}', sort: 29 },
 
   // --- Mine commitment tiers ---
   { slug: "mine-100",   kind: "mine", title: "Mine with $100",   description: "Commit $100 testnet USDC to the miner. Free from faucet.circle.com.",   points: 150,  max: 1, payload: '{"thresholdUsd":100}',   sort: 30 },
