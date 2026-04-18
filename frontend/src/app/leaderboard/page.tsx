@@ -203,9 +203,14 @@ export default function LeaderboardPage() {
                : `No commits in the last ${window === "24h" ? "24 hours" : "7 days"}.`}
           </div>
         )}
-        {displayed && displayed.slice(0, 100).map((r) => (
+        {displayed && displayed.slice(0, q ? 100 : 20).map((r) => (
           <RankRow key={r.address} r={r} highlight={me?.toLowerCase() === r.address.toLowerCase()} />
         ))}
+        {displayed && !q && (rows?.length ?? 0) > 20 && (
+          <div className="px-5 py-3 text-center text-[11px] text-ink-faint border-t border-line/50">
+            Showing top 20 of {rows?.length}. Search above to find any wallet.
+          </div>
+        )}
       </section>
 
       {me && !myRow && rows && (
