@@ -409,6 +409,12 @@ function fdogeBoughtWei(wallet: string): bigint {
   ).get(wallet.toLowerCase()) as { fdoge_bought_total: string } | undefined;
   return parseWei(row?.fdoge_bought_total);
 }
+function lpProvidedUsdcWei(wallet: string): bigint {
+  const row = db.prepare(
+    `SELECT usdc_side_total FROM community_lp_adds WHERE wallet = ?`
+  ).get(wallet.toLowerCase()) as { usdc_side_total: string } | undefined;
+  return parseWei(row?.usdc_side_total);
+}
 
 function tradeVerifier(user: User, task: Task): VerifyResult {
   const payload = safeJson(task.payload) as { thresholdUsd?: number };
@@ -471,6 +477,29 @@ register("buy-fdoge-500",   async (u, t) => buyFdogeVerifier(u, t));
 register("buy-fdoge-1000",  async (u, t) => buyFdogeVerifier(u, t));
 register("buy-fdoge-10000", async (u, t) => buyFdogeVerifier(u, t));
 
+// fDOGE/USDC LP tiers. Threshold is USD (USDC-side wei, 6 decimals).
+// Indexer filters LiquidityAdded events on the ForgeRouter for the
+// fDOGE/USDC pair and sums the USDC side.
+function fdogeLpVerifier(user: User, task: Task): VerifyResult {
+  const payload = safeJson(task.payload) as { thresholdUsd?: number };
+  const usd = Number(payload.thresholdUsd ?? 0);
+  if (!usd) return { ok: false, reason: "bad_threshold" };
+  const need = BigInt(usd) * 1_000_000n;
+  const have = lpProvidedUsdcWei(user.wallet);
+  if (have < need) {
+    return { ok: false, reason: "below_threshold", meta: {
+      progressUsd:  Number(have / 1_000_000n),
+      thresholdUsd: usd,
+    } };
+  }
+  return { ok: true, points: task.points, proof: { lpProvidedUsd: Number(have / 1_000_000n) } };
+}
+register("fdoge-lp-10",   async (u, t) => fdogeLpVerifier(u, t));
+register("fdoge-lp-50",   async (u, t) => fdogeLpVerifier(u, t));
+register("fdoge-lp-100",  async (u, t) => fdogeLpVerifier(u, t));
+register("fdoge-lp-500",  async (u, t) => fdogeLpVerifier(u, t));
+register("fdoge-lp-1000", async (u, t) => fdogeLpVerifier(u, t));
+
 // Public helpers so /community/me can show progress bars without a
 // separate verification endpoint round-trip.
 export function getTradeVolumeUsd(wallet: string): number {
@@ -481,6 +510,9 @@ export function getMineVolumeUsd(wallet: string): number {
 }
 export function getFdogeBought(wallet: string): number {
   return Number(fdogeBoughtWei(wallet) / 10n ** 18n);
+}
+export function getLpProvidedUsd(wallet: string): number {
+  return Number(lpProvidedUsdcWei(wallet) / 1_000_000n);
 }
 
 // ---------- helpers ----------

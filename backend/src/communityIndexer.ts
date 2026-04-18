@@ -48,6 +48,7 @@ const COMMITS_RAW_MAX_ITERS = Number(process.env.COMMUNITY_COMMITS_MAX_ITERS ?? 
 // ---- ABIs (just the events we read) ----
 const SWAP_EVENT      = parseAbiItem("event Swap(address indexed user, address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut, uint256 fee)");
 const COMMITTED_EVENT = parseAbiItem("event Committed(address indexed user, uint256 indexed positionId, uint256 amount, uint8 mode, uint64 unlockAt)");
+const LIQUIDITY_ADDED_EVENT = parseAbiItem("event LiquidityAdded(address indexed user, address indexed tokenA, address indexed tokenB, uint256 amountA, uint256 amountB, uint256 liquidity)");
 
 // ---- cursor helpers ----
 function getCursor(source: string, fallback: bigint): bigint {
@@ -89,6 +90,27 @@ function addTradeVolume(wallet: string, usdcWei: bigint) {
   } else {
     db.prepare(
       `INSERT INTO community_trade_volume (wallet, usdc_in_total, swap_count, updated_at)
+       VALUES (?, ?, 1, ?)`
+    ).run(w, usdcWei.toString(), now);
+  }
+}
+function addLpProvide(wallet: string, usdcWei: bigint) {
+  if (usdcWei <= 0n) return;
+  const w = wallet.toLowerCase();
+  const now = Math.floor(Date.now() / 1000);
+  const row = db.prepare(
+    `SELECT usdc_side_total FROM community_lp_adds WHERE wallet = ?`
+  ).get(w) as { usdc_side_total?: string } | undefined;
+  if (row) {
+    const total = parseWei(row.usdc_side_total) + usdcWei;
+    db.prepare(
+      `UPDATE community_lp_adds
+         SET usdc_side_total = ?, add_count = add_count + 1, updated_at = ?
+       WHERE wallet = ?`
+    ).run(total.toString(), now, w);
+  } else {
+    db.prepare(
+      `INSERT INTO community_lp_adds (wallet, usdc_side_total, add_count, updated_at)
        VALUES (?, ?, 1, ?)`
     ).run(w, usdcWei.toString(), now);
   }
@@ -233,6 +255,39 @@ async function pollCommitsRaw(head: bigint) {
   }
 }
 
+// Router LiquidityAdded → community_lp_adds. Only fDOGE/USDC pair counts
+// for the public "Provide LP" task tiers. Needs FDOGE address; silently
+// no-ops if unset (same pattern as fDOGE-buys).
+async function pollLpAdds(head: bigint) {
+  if (!FDOGE) return;
+  const fallback = head > BACKFILL_BLOCKS ? head - BACKFILL_BLOCKS : 0n;
+  const from = getCursor("forge_router_lp_add", fallback);
+  if (from >= head) return;
+  const to = from + RANGE > head ? head : from + RANGE;
+
+  const logs = await client.getLogs({
+    address: ROUTER,
+    event: LIQUIDITY_ADDED_EVENT,
+    fromBlock: from,
+    toBlock:   to,
+  });
+
+  for (const log of logs) {
+    const a = log.args;
+    if (!a?.user || !a.tokenA || !a.tokenB) continue;
+    const tA = a.tokenA.toLowerCase();
+    const tB = a.tokenB.toLowerCase();
+    // Only fDOGE/USDC pair qualifies for the LP task tiers.
+    const isFdogeUsdc = (tA === FDOGE && tB === USDC) || (tA === USDC && tB === FDOGE);
+    if (!isFdogeUsdc) continue;
+    const usdcAmount = tA === USDC ? (a.amountA ?? 0n) : (a.amountB ?? 0n);
+    addLpProvide(a.user, usdcAmount);
+  }
+
+  setCursor("forge_router_lp_add", to);
+  if (logs.length > 0) console.log(`[community] lp-adds ${from} → ${to} (${logs.length} logs)`);
+}
+
 async function pollCommits(head: bigint) {
   const fallback = head > BACKFILL_BLOCKS ? head - BACKFILL_BLOCKS : 0n;
   const from = getCursor("miner_committed", fallback);
@@ -260,7 +315,7 @@ async function pollCommits(head: bigint) {
 async function tick() {
   try {
     const head = await client.getBlockNumber();
-    await Promise.all([pollSwaps(head), pollCommits(head), pollCommitsRaw(head)]);
+    await Promise.all([pollSwaps(head), pollCommits(head), pollCommitsRaw(head), pollLpAdds(head)]);
   } catch (e: unknown) {
     console.error("[community] tick error", (e as Error)?.message);
   }

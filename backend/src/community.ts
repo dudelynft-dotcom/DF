@@ -12,7 +12,7 @@
 import { Router, type Request, type Response } from "express";
 import crypto from "node:crypto";
 import { db } from "./db.js";
-import { getFdogeBought, getMineVolumeUsd, getTradeVolumeUsd, runVerifier, QUIZ_QUESTIONS } from "./communityVerifiers.js";
+import { getFdogeBought, getLpProvidedUsd, getMineVolumeUsd, getTradeVolumeUsd, runVerifier, QUIZ_QUESTIONS } from "./communityVerifiers.js";
 import { verifyTgLogin, type TgLoginPayload } from "./telegram.js";
 
 // Simple in-memory rate limiter. Sliding window, per (xId OR IP) key.
@@ -182,9 +182,10 @@ community.get("/me", (req, res) => {
     referrals: refCount.n,
     createdAt: user.created_at,
     volume: {
-      tradeUsd:    getTradeVolumeUsd(user.wallet),
-      mineUsd:     getMineVolumeUsd(user.wallet),
-      fdogeBought: getFdogeBought(user.wallet),
+      tradeUsd:      getTradeVolumeUsd(user.wallet),
+      mineUsd:       getMineVolumeUsd(user.wallet),
+      fdogeBought:   getFdogeBought(user.wallet),
+      lpProvidedUsd: getLpProvidedUsd(user.wallet),
     },
     telegram: user.tg_user_id
       ? { id: user.tg_user_id, username: user.tg_username }
@@ -503,7 +504,7 @@ community.get("/admin/users", (req, res) => {
       id: r.id, xId: r.x_id, xHandle: r.x_handle, xAvatar: r.x_avatar,
       wallet: r.wallet, tier: r.tier, createdAt: r.created_at,
       referrerId: r.referrer_id, points: r.points,
-      volume: { tradeUsd: getTradeVolumeUsd(r.wallet), mineUsd: getMineVolumeUsd(r.wallet), fdogeBought: getFdogeBought(r.wallet) },
+      volume: { tradeUsd: getTradeVolumeUsd(r.wallet), mineUsd: getMineVolumeUsd(r.wallet), fdogeBought: getFdogeBought(r.wallet), lpProvidedUsd: getLpProvidedUsd(r.wallet) },
     })),
   });
 });
@@ -850,10 +851,10 @@ community.get("/admin/export.csv", (req, res) => {
     const s = String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const header = "id,x_id,x_handle,wallet,tier,points,trade_usd,mine_usd,fdoge_bought,referrer_id,tg_username,banned,created_at";
+  const header = "id,x_id,x_handle,wallet,tier,points,trade_usd,mine_usd,fdoge_bought,lp_provided_usd,referrer_id,tg_username,banned,created_at";
   const lines = users.map((u) => [
     u.id, u.x_id, u.x_handle, u.wallet, u.tier, u.points,
-    getTradeVolumeUsd(u.wallet), getMineVolumeUsd(u.wallet), getFdogeBought(u.wallet),
+    getTradeVolumeUsd(u.wallet), getMineVolumeUsd(u.wallet), getFdogeBought(u.wallet), getLpProvidedUsd(u.wallet),
     u.referrer_id ?? "", u.tg_username ?? "", u.banned, u.created_at,
   ].map(esc).join(","));
   const csv = [header, ...lines].join("\n") + "\n";

@@ -158,6 +158,15 @@ CREATE TABLE IF NOT EXISTS community_fdoge_buys (
   buy_count           INTEGER NOT NULL DEFAULT 0,
   updated_at          INTEGER NOT NULL
 );
+-- Running total of USDC-side value added to the fDOGE/USDC pool.
+-- Populated from ForgeRouter.LiquidityAdded events filtered on the
+-- fDOGE/USDC pair. USDC is 6-decimal wei.
+CREATE TABLE IF NOT EXISTS community_lp_adds (
+  wallet            TEXT PRIMARY KEY,
+  usdc_side_total   TEXT NOT NULL DEFAULT '0',
+  add_count         INTEGER NOT NULL DEFAULT 0,
+  updated_at        INTEGER NOT NULL
+);
 
 -- Event cursors per (source, address). Independent from the existing
 -- indexer_cursor so the community indexer can run alongside.
@@ -226,6 +235,12 @@ const SEED = [
 
   // --- Liquidity ---
   { slug: "provide-cdoge-lp", kind: "trade", title: "Provide cDOGE/USDC liquidity", description: "Add liquidity to the cDOGE/USDC pool on the Pool page. Earn 0.30% on every swap.", points: 200, max: 1, payload: '{"trustBased":true,"url":"https://dogeforge.fun/pool"}', sort: 42 },
+  // --- fDOGE/USDC LP tiers (auto-detected on-chain) ---
+  { slug: "fdoge-lp-10",   kind: "trade", title: "Provide $10 fDOGE/USDC LP",    description: "Add $10 USDC-side liquidity to the fDOGE/USDC pool. Progress tracks automatically.",    points: 150,  max: 1, payload: '{"thresholdUsd":10}',   sort: 43 },
+  { slug: "fdoge-lp-50",   kind: "trade", title: "Provide $50 fDOGE/USDC LP",    description: "Add $50 USDC-side liquidity to the fDOGE/USDC pool. Progress tracks automatically.",    points: 400,  max: 1, payload: '{"thresholdUsd":50}',   sort: 44 },
+  { slug: "fdoge-lp-100",  kind: "trade", title: "Provide $100 fDOGE/USDC LP",   description: "Add $100 USDC-side liquidity to the fDOGE/USDC pool. Progress tracks automatically.",   points: 800,  max: 1, payload: '{"thresholdUsd":100}',  sort: 45 },
+  { slug: "fdoge-lp-500",  kind: "trade", title: "Provide $500 fDOGE/USDC LP",   description: "Add $500 USDC-side liquidity to the fDOGE/USDC pool. Progress tracks automatically.",   points: 2500, max: 1, payload: '{"thresholdUsd":500}',  sort: 46 },
+  { slug: "fdoge-lp-1000", kind: "trade", title: "Provide $1,000 fDOGE/USDC LP", description: "Add $1,000 USDC-side liquidity to the fDOGE/USDC pool. Progress tracks automatically.", points: 5000, max: 1, payload: '{"thresholdUsd":1000}', sort: 47 },
 
   // --- Daily + streak ---
   { slug: "daily-tweet",   kind: "daily", title: "Daily tweet",    description: "Tweet about DOGE FORGE daily with $FDOGE and @DogeForgefun. 1 per day.", points: 100, max: -1, payload: '{"requireTokens":["$FDOGE","@DogeForgefun"]}', sort: 50 },
