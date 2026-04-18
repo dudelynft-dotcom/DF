@@ -6,7 +6,7 @@ import {
   getConnections,
 } from "@wagmi/core";
 import { tempo } from "@/config/chain";
-import { numberToHex } from "viem";
+import { numberToHex, BaseError, ContractFunctionRevertedError } from "viem";
 
 type EIP1193Provider = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -88,9 +88,49 @@ async function getActiveProvider(config: Config): Promise<EIP1193Provider> {
   return provider as EIP1193Provider;
 }
 
+// Custom errors emitted by our contracts mapped to user-facing copy. Keys
+// must match the `error Foo()` names in contracts/src/*.sol. Missing ones
+// fall through to a camelCase-spaced fallback so users always see something
+// readable instead of raw selector bytes.
+const FRIENDLY_ERRORS: Record<string, string> = {
+  // ForgeRouter
+  ExpiredDeadline:         "The transaction took too long to confirm. Try again.",
+  BadPath:                 "Route is invalid. Pick a different pair.",
+  ZeroAmount:              "Amount must be greater than zero.",
+  InsufficientOutputAmount:"Price moved too fast. Increase slippage or try a smaller amount.",
+  InsufficientInputAmount: "Input amount is too small for this swap.",
+  InsufficientAAmount:     "Price moved — try a smaller amount or increase slippage.",
+  InsufficientBAmount:     "Price moved — try a smaller amount or increase slippage.",
+  PairMissing:             "No pool exists for this pair yet.",
+  PairNotWhitelisted:      "This pair isn't enabled for trading yet. Please check back soon.",
+  FeeTooHigh:              "Configured fee exceeds the protocol maximum.",
+  ZeroAddress:             "Invalid address.",
+  // TdogePair
+  InsufficientLiquidity:       "Not enough liquidity in the pool for this trade.",
+  InsufficientLiquidityMinted: "Pool received too little liquidity — try larger amounts.",
+  InsufficientLiquidityBurned: "Pool received too little liquidity to burn.",
+  // ERC20 / OZ
+  ERC20InsufficientBalance:   "Insufficient token balance.",
+  ERC20InsufficientAllowance: "Approval missing or too low. Approve, then try again.",
+  // Ownable
+  OwnableUnauthorizedAccount: "You don't have permission for that action.",
+};
+
+function friendlyForError(name: string | undefined): string | null {
+  if (!name) return null;
+  if (FRIENDLY_ERRORS[name]) return FRIENDLY_ERRORS[name];
+  // Unknown error: split camelCase into a sentence. Keeps output readable
+  // even for errors we haven't mapped yet, so nothing ever renders as raw
+  // selector bytes like "B0\uFFFD#".
+  const spaced = name.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1) + ".";
+}
+
 export function prettifyError(e: unknown): string {
   const raw = (e as { shortMessage?: string; message?: string; details?: string; code?: number });
   const msg = raw?.shortMessage || raw?.details || raw?.message || String(e);
+
+  // Wallet-side rejections never reach the chain — check these first.
   if (raw?.code === 4001 || /user rejected|user denied|rejected the request/i.test(msg)) {
     return "Request rejected in wallet.";
   }
@@ -100,6 +140,19 @@ export function prettifyError(e: unknown): string {
   if (/insufficient funds/i.test(msg)) {
     return "Insufficient balance for this transaction.";
   }
+
+  // Walk viem's error tree to extract the decoded custom-error name.
+  // Without this, undecoded selectors render as raw bytes (e.g. "B0\uFFFD#")
+  // which is unreadable for users.
+  if (e instanceof BaseError) {
+    const revert = e.walk((err) => err instanceof ContractFunctionRevertedError);
+    if (revert instanceof ContractFunctionRevertedError) {
+      const friendly = friendlyForError(revert.data?.errorName);
+      if (friendly) return friendly;
+      if (revert.reason) return revert.reason;
+    }
+  }
+
   if (msg.length > 240) return msg.slice(0, 240) + "…";
   return msg;
 }
