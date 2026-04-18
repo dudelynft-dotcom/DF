@@ -38,6 +38,11 @@ const BACKFILL_BLOCKS = BigInt(process.env.COMMUNITY_BACKFILL ?? 50_000);
 // Raw commits backfill is larger because the public leaderboard needs
 // full testnet history, not just the recent volume-tracking window.
 const COMMITS_RAW_BACKFILL = BigInt(process.env.COMMUNITY_COMMITS_BACKFILL ?? 1_500_000);
+// Raw commits poll uses Arc's 10k-block getLogs maximum and loops
+// inside a single tick until caught up. Without this, a cold 1.5M-block
+// backfill at 500 blocks/12s would take ~10 hours.
+const COMMITS_RAW_RANGE = BigInt(process.env.COMMUNITY_COMMITS_RANGE ?? 9_999);
+const COMMITS_RAW_MAX_ITERS = Number(process.env.COMMUNITY_COMMITS_MAX_ITERS ?? 400); // 400 * 9999 ≈ 4M blocks per tick
 
 // ---- ABIs (just the events we read) ----
 const SWAP_EVENT      = parseAbiItem("event Swap(address indexed user, address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut, uint256 fee)");
@@ -144,44 +149,59 @@ const insertCommit = db.prepare(
 
 // Raw Committed → miner_commits. Separate cursor from the volume poller so
 // the raw table can backfill deeper without double-counting mine_volume.
+// Loops inside one tick until either caught up to head or MAX_ITERS hit,
+// so a cold 1.5M-block backfill completes in minutes instead of hours.
 async function pollCommitsRaw(head: bigint) {
   const fallback = head > COMMITS_RAW_BACKFILL ? head - COMMITS_RAW_BACKFILL : 0n;
-  const from = getCursor("miner_commits_raw", fallback);
+  let from = getCursor("miner_commits_raw", fallback);
   if (from >= head) return;
-  const to = from + RANGE > head ? head : from + RANGE;
 
-  const logs = await client.getLogs({
-    address: MINER,
-    event: COMMITTED_EVENT,
-    fromBlock: from,
-    toBlock:   to,
-  });
+  for (let iter = 0; iter < COMMITS_RAW_MAX_ITERS; iter++) {
+    if (from >= head) break;
+    const to = from + COMMITS_RAW_RANGE > head ? head : from + COMMITS_RAW_RANGE;
 
-  // Fetch block timestamps lazily, one per unique block in the batch.
-  const tsCache = new Map<bigint, number>();
-  for (const log of logs) {
-    const a = log.args;
-    if (!a?.user || a.amount == null || log.blockNumber == null) continue;
-    let ts = tsCache.get(log.blockNumber);
-    if (ts === undefined) {
-      try {
-        const b = await client.getBlock({ blockNumber: log.blockNumber });
-        ts = Number(b.timestamp);
-        tsCache.set(log.blockNumber, ts);
-      } catch { continue; }
+    let logs;
+    try {
+      logs = await client.getLogs({
+        address: MINER,
+        event: COMMITTED_EVENT,
+        fromBlock: from,
+        toBlock:   to,
+      });
+    } catch (e: unknown) {
+      console.error(`[community] commits-raw getLogs ${from}-${to} failed:`, (e as Error)?.message);
+      break; // give up for this tick; cursor stays, next tick retries
     }
-    insertCommit.run(
-      log.transactionHash?.toLowerCase() ?? "",
-      Number(log.logIndex ?? 0),
-      a.user.toLowerCase(),
-      a.amount.toString(),
-      Number(log.blockNumber),
-      ts
-    );
-  }
 
-  setCursor("miner_commits_raw", to);
-  if (logs.length > 0) console.log(`[community] commits-raw ${from} → ${to} (${logs.length} logs)`);
+    // Fetch block timestamps lazily, one per unique block in the batch.
+    const tsCache = new Map<bigint, number>();
+    for (const log of logs) {
+      const a = log.args;
+      if (!a?.user || a.amount == null || log.blockNumber == null) continue;
+      let ts = tsCache.get(log.blockNumber);
+      if (ts === undefined) {
+        try {
+          const b = await client.getBlock({ blockNumber: log.blockNumber });
+          ts = Number(b.timestamp);
+          tsCache.set(log.blockNumber, ts);
+        } catch { continue; }
+      }
+      insertCommit.run(
+        log.transactionHash?.toLowerCase() ?? "",
+        Number(log.logIndex ?? 0),
+        a.user.toLowerCase(),
+        a.amount.toString(),
+        Number(log.blockNumber),
+        ts
+      );
+    }
+
+    setCursor("miner_commits_raw", to);
+    if (logs.length > 0 || to === head) {
+      console.log(`[community] commits-raw ${from} → ${to} (${logs.length} logs)${to === head ? " [caught up]" : ""}`);
+    }
+    from = to;
+  }
 }
 
 async function pollCommits(head: bigint) {
