@@ -46,6 +46,19 @@ export function useTokenMetrics(tokens: { address: `0x${string}`; decimals: numb
     query: { refetchInterval: 10_000 },
   });
 
+  // Protocol-owned fDOGE — subtracted from totalSupply to get the true
+  // circulating supply (and therefore a realistic market cap). Tokens
+  // sitting in the LiquidityManager or the fDOGE/USDC pair are
+  // protocol-held, not in any user's wallet.
+  const { data: protocolFdoge } = useReadContracts({
+    contracts: [
+      { address: addresses.doge, abi: erc20Abi, functionName: "balanceOf", args: [addresses.liquidityManager], chainId: tempo.id },
+      { address: addresses.doge, abi: erc20Abi, functionName: "balanceOf", args: [addresses.pair],             chainId: tempo.id },
+    ],
+    allowFailure: true,
+    query: { refetchInterval: 15_000 },
+  });
+
   // For "project" tokens other than fDOGE (e.g. cDOGE), resolve their
   // USDC pair from the factory + read reserves to compute price.
   const projectTokens = tokens.filter(
@@ -146,7 +159,19 @@ export function useTokenMetrics(tokens: { address: `0x${string}`; decimals: numb
         liquidity = pp.liqUsd;
       }
 
-      const mc  = price !== null && totalHuman !== null ? price * totalHuman : null;
+      // Circulating supply = totalSupply − protocol-owned holdings.
+      // Only fDOGE has protocol-owned balances; other tokens default to
+      // their full totalSupply. Clamped at 0 to guard against any
+      // transient read where LM/pair balances briefly exceed totalSupply.
+      let circ = totalHuman;
+      if (isTdoge && totalHuman !== null) {
+        const lmBal   = protocolFdoge?.[0]?.result as bigint | undefined;
+        const pairBal = protocolFdoge?.[1]?.result as bigint | undefined;
+        const protocolOwned = Number(formatUnits((lmBal ?? 0n) + (pairBal ?? 0n), t.decimals));
+        circ = Math.max(0, totalHuman - protocolOwned);
+      }
+
+      const mc  = price !== null && circ !== null ? price * circ : null;
       const fdv = isTdoge ? (price !== null ? price * TDOGE_INITIAL_CAP : null) : mc;
 
       out[t.address.toLowerCase()] = {
@@ -154,14 +179,14 @@ export function useTokenMetrics(tokens: { address: `0x${string}`; decimals: numb
         marketCapUsd: mc,
         fdvUsd: fdv,
         liquidityUsd: liquidity,
-        circulatingSupply: totalHuman,
+        circulatingSupply: circ,
         totalSupply: totalHuman,
         volume24hUsd: null,
         priceChange24hPct: null,
       };
     });
     return out;
-  }, [supplies, pairData, pairAddrs, projectPairData, tokens, projectTokens]);
+  }, [supplies, pairData, protocolFdoge, pairAddrs, projectPairData, tokens, projectTokens]);
 }
 
 export function fmtUsd(n: number | null): string {
