@@ -80,7 +80,8 @@ export default function MinePage() {
   const allowance    = globals?.[7]?.result as bigint | undefined;
   const minerBal     = globals?.[8]?.result as bigint | undefined;
   const lmBal        = globals?.[9]?.result as bigint | undefined;
-  const pairBal      = globals?.[10]?.result as bigint | undefined;
+  // globals[10] is the fDOGE/USDC pair USDC balance — surfaced on the
+  // landing page as part of LP TVL, not needed here.
   const reserves     = globals?.[11]?.result as readonly [bigint, bigint, number] | undefined;
   const token0       = globals?.[12]?.result as `0x${string}` | undefined;
 
@@ -111,8 +112,11 @@ export default function MinePage() {
     const dailyUSD       = dailyfDOGE * fdogePrice;
     return dailyUSD * 365 * 100;
   }
-  const tvl = (minerBal !== undefined && lmBal !== undefined && pairBal !== undefined)
-    ? minerBal + lmBal + pairBal
+  // Matches the "Mining TVL" tile on the landing page (Miner + LM pipeline).
+  // The fDOGE/USDC pair balance is protocol-adjacent LP, surfaced
+  // separately on the landing page as "LP TVL".
+  const miningTvl = (minerBal !== undefined && lmBal !== undefined)
+    ? minerBal + lmBal
     : undefined;
 
   // Positions array (ticks every 2s so earnings feel live)
@@ -220,7 +224,7 @@ export default function MinePage() {
 
       {/* Protocol-wide */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-px bg-line rounded-xl overflow-hidden">
-        <Stat label="TVL"               value={tvl !== undefined ? fmtUsd(tvl) : "-"} unit="USDC locked across protocol" emphasis />
+        <Stat label="Mining TVL"        value={miningTvl !== undefined ? `$${fmtUsd(miningTvl)}` : "-"} unit="Miner + LiquidityManager" emphasis />
         <Stat label="Current Phase"     value={phase ? toRoman(Number(phase[0]) + 1) : "-"} />
         <Stat label="Phase Rate"        value={phase ? fmtDoge(phase[1]) : "-"} unit="fDOGE / USDC" />
         <Stat label="Conversion Rate"   value={convRate ? `${(Number(convRate) / 100).toFixed(2)}%` : "-"} unit="per day" />
