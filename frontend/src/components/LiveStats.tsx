@@ -79,23 +79,23 @@ export function LiveStats() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-line rounded-xl overflow-hidden">
         <StatTile
           label="Total TVL"
-          value={tvl !== undefined ? fmt(tvl, PATHUSD_DECIMALS) : "-"}
+          value={tvl !== undefined ? `$${fmt(tvl, PATHUSD_DECIMALS)}` : "-"}
           unit="USDC locked across protocol"
           emphasis
         />
         <StatTile
           label="Mining TVL"
-          value={miningTvl !== undefined ? fmt(miningTvl, PATHUSD_DECIMALS) : "-"}
+          value={miningTvl !== undefined ? `$${fmt(miningTvl, PATHUSD_DECIMALS)}` : "-"}
           unit="Miner + LiquidityManager"
         />
         <StatTile
           label="LP TVL"
-          value={lpTvl !== undefined ? fmt(lpTvl, PATHUSD_DECIMALS) : "-"}
+          value={lpTvl !== undefined ? `$${fmt(lpTvl, PATHUSD_DECIMALS)}` : "-"}
           unit="USDC across all pools"
         />
         <StatTile
           label="USDC Converted"
-          value={totalFlowed !== undefined ? fmt(totalFlowed, PATHUSD_DECIMALS) : "-"}
+          value={totalFlowed !== undefined ? `$${fmt(totalFlowed, PATHUSD_DECIMALS)}` : "-"}
           unit="cumulative flowed"
         />
         <StatTile
