@@ -13,7 +13,7 @@ type Me = {
   points: number;
   completions: Record<string, { n: number; lastAt: number }>;
   referrals: number;
-  volume?: { tradeUsd: number; mineUsd: number };
+  volume?: { tradeUsd: number; mineUsd: number; fdogeBought?: number; lpProvidedUsd?: number };
   telegram?: { id: string; username: string | null } | null;
 } | null;
 
@@ -152,16 +152,26 @@ export default function Tasks() {
             </div>
           ) : (
             visible.map((t) => {
-              const progressUsd =
-                t.kind === "trade" ? me.volume?.tradeUsd :
-                t.kind === "mine"  ? me.volume?.mineUsd  :
+              // Route the progress source per task family. LP tasks track
+              // USDC-side liquidity provided; buy-fdoge tasks track fDOGE
+              // tokens received; legacy trade/mine tasks fall through to
+              // their existing USD volume field.
+              const isLp  = t.slug.startsWith("fdoge-lp-");
+              const isBuy = t.slug.startsWith("buy-fdoge-");
+              const progress =
+                isLp                ? me.volume?.lpProvidedUsd :
+                isBuy               ? me.volume?.fdogeBought   :
+                t.kind === "trade"  ? me.volume?.tradeUsd      :
+                t.kind === "mine"   ? me.volume?.mineUsd       :
                 undefined;
+              const progressUnit = isBuy ? "fdoge" : "usd";
               return (
                 <TaskCard
                   key={t.id}
                   task={t}
                   onClaimed={onClaimed}
-                  progressUsd={progressUsd}
+                  progressUsd={progress}
+                  progressUnit={progressUnit}
                   telegramLinked={!!me.telegram}
                   onTelegramLinked={onClaimed}
                 />

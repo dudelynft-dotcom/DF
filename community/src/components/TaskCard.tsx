@@ -32,13 +32,15 @@ const KIND_TONE: Record<TaskCardData["kind"], string> = {
 };
 
 export function TaskCard({
-  task, onClaimed, disabled, progressUsd, telegramLinked, onTelegramLinked,
+  task, onClaimed, disabled, progressUsd, progressUnit = "usd", telegramLinked, onTelegramLinked,
 }: {
   task: TaskCardData;
   onClaimed: (awarded: number, total: number) => void;
   disabled?: boolean;
-  /** For trade/mine tasks: current USD volume the user has accumulated. */
+  /** Current progress value. Interpreted per progressUnit. */
   progressUsd?: number;
+  /** "usd" = $-prefixed dollars, "fdoge" = "N fDOGE" token amount. */
+  progressUnit?: "usd" | "fdoge";
   /** True once the user has linked their Telegram (from /community/me). */
   telegramLinked?: boolean;
   onTelegramLinked?: () => void;
@@ -109,15 +111,21 @@ export function TaskCard({
           <h3 className="mt-1.5 sm:mt-2 font-medium text-ink text-sm sm:text-base leading-tight">{task.title}</h3>
           <p className="mt-1 text-xs sm:text-sm text-ink-muted leading-relaxed">{task.description}</p>
 
-          {/* Progress bar — only on trade/mine tier tasks where we know
-              the threshold and have a live USDC volume number. */}
-          {(task.kind === "trade" || task.kind === "mine") && typeof progressUsd === "number" &&
-            typeof (task.payload as { thresholdUsd?: number })?.thresholdUsd === "number" && (
-            <Progress
-              progressUsd={progressUsd}
-              thresholdUsd={(task.payload as { thresholdUsd: number }).thresholdUsd}
-            />
-          )}
+          {/* Progress bar — trade/mine tier tasks. Threshold is either
+              thresholdUsd (USDC volume or LP tasks) or thresholdFdoge
+              (buy-fDOGE tasks); the parent routes which field to pass. */}
+          {(task.kind === "trade" || task.kind === "mine") && typeof progressUsd === "number" && (() => {
+            const pl = task.payload as { thresholdUsd?: number; thresholdFdoge?: number };
+            const threshold = progressUnit === "fdoge" ? pl.thresholdFdoge : pl.thresholdUsd;
+            if (typeof threshold !== "number") return null;
+            return (
+              <Progress
+                progress={progressUsd}
+                threshold={threshold}
+                unit={progressUnit}
+              />
+            );
+          })()}
 
           {err && (
             <div className="mt-2 text-xs text-red-300">{err}</div>
@@ -255,7 +263,14 @@ function friendly(reason?: string, meta?: Record<string, unknown>): string {
     case "no_name_yet":             return (meta?.hint as string) ?? "Claim your .fdoge identity first.";
     case "names_address_unset":     return "Identity contract not configured. Backend env missing.";
     case "indexer_not_live":        return "On-chain verification ships in step 5.";
-    case "below_threshold":         return `Need $${meta?.thresholdUsd} total — you have $${meta?.progressUsd}. Indexer updates ~12s.`;
+    case "below_threshold": {
+      // Unit depends on the task: buy-fDOGE uses thresholdFdoge/progressFdoge
+      // (token amounts), everything else uses thresholdUsd/progressUsd.
+      if (typeof meta?.thresholdFdoge === "number") {
+        return `Need ${meta.thresholdFdoge} fDOGE total — you have ${meta.progressFdoge ?? 0} fDOGE. Indexer updates ~12s.`;
+      }
+      return `Need $${meta?.thresholdUsd} total — you have $${meta?.progressUsd}. Indexer updates ~12s.`;
+    }
     case "tweet_verification_not_live": return "Tweet check ships in step 6.";
     case "missing_tweet_url":       return "Paste your tweet URL.";
     case "bad_tweet_url":           return "That doesn't look like a tweet URL.";
@@ -357,14 +372,17 @@ function Spinner() {
   );
 }
 
-function Progress({ progressUsd, thresholdUsd }: { progressUsd: number; thresholdUsd: number }) {
-  const pct = Math.min(100, Math.max(0, (progressUsd / thresholdUsd) * 100));
-  const done = progressUsd >= thresholdUsd;
+function Progress({ progress, threshold, unit = "usd" }: { progress: number; threshold: number; unit?: "usd" | "fdoge" }) {
+  const pct = Math.min(100, Math.max(0, (progress / threshold) * 100));
+  const done = progress >= threshold;
+  const fmt = (n: number) => unit === "fdoge"
+    ? `${n.toLocaleString()} fDOGE`
+    : `$${n.toLocaleString()}`;
   return (
     <div className="mt-3">
       <div className="flex items-baseline justify-between text-xs">
         <span className={done ? "text-emerald-300" : "text-ink-muted"}>
-          ${progressUsd.toLocaleString()} / ${thresholdUsd.toLocaleString()}
+          {fmt(progress)} / {fmt(threshold)}
         </span>
         <span className="text-ink-faint tabular">{Math.floor(pct)}%</span>
       </div>

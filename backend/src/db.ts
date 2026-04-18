@@ -167,6 +167,13 @@ CREATE TABLE IF NOT EXISTS community_lp_adds (
   add_count         INTEGER NOT NULL DEFAULT 0,
   updated_at        INTEGER NOT NULL
 );
+-- Dedup map for LP-add events. Lets the indexer safely re-walk history
+-- (e.g. when the cursor is reset to backfill) without double-counting.
+CREATE TABLE IF NOT EXISTS community_lp_adds_seen (
+  tx         TEXT NOT NULL,
+  log_index  INTEGER NOT NULL,
+  PRIMARY KEY (tx, log_index)
+);
 
 -- Event cursors per (source, address). Independent from the existing
 -- indexer_cursor so the community indexer can run alongside.

@@ -44,6 +44,12 @@ const COMMITS_RAW_BACKFILL = BigInt(process.env.COMMUNITY_COMMITS_BACKFILL ?? 1_
 // backfill at 500 blocks/12s would take ~10 hours.
 const COMMITS_RAW_RANGE = BigInt(process.env.COMMUNITY_COMMITS_RANGE ?? 9_999);
 const COMMITS_RAW_MAX_ITERS = Number(process.env.COMMUNITY_COMMITS_MAX_ITERS ?? 400); // 400 * 9999 ≈ 4M blocks per tick
+// LP-add poller backfill. Larger than the volume default so historical
+// LP providers are credited for the new fDOGE/USDC LP tasks. Uses the
+// same 9999-block max + in-tick catchup loop as commits-raw.
+const LP_ADD_BACKFILL  = BigInt(process.env.COMMUNITY_LP_BACKFILL   ?? 1_500_000);
+const LP_ADD_RANGE     = BigInt(process.env.COMMUNITY_LP_RANGE      ?? 9_999);
+const LP_ADD_MAX_ITERS = Number(process.env.COMMUNITY_LP_MAX_ITERS  ?? 400);
 
 // ---- ABIs (just the events we read) ----
 const SWAP_EVENT      = parseAbiItem("event Swap(address indexed user, address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut, uint256 fee)");
@@ -258,34 +264,63 @@ async function pollCommitsRaw(head: bigint) {
 // Router LiquidityAdded → community_lp_adds. Only fDOGE/USDC pair counts
 // for the public "Provide LP" task tiers. Needs FDOGE address; silently
 // no-ops if unset (same pattern as fDOGE-buys).
+//
+// Uses a deeper backfill + 9999-block range + in-tick catchup loop so
+// historical LP providers (from before this poller existed) get credited.
+// Without this, only wallets that added LP after the indexer restart
+// would show up in the new task tier progress.
 async function pollLpAdds(head: bigint) {
   if (!FDOGE) return;
-  const fallback = head > BACKFILL_BLOCKS ? head - BACKFILL_BLOCKS : 0n;
-  const from = getCursor("forge_router_lp_add", fallback);
+  const fallback = head > LP_ADD_BACKFILL ? head - LP_ADD_BACKFILL : 0n;
+  let from = getCursor("forge_router_lp_add", fallback);
   if (from >= head) return;
-  const to = from + RANGE > head ? head : from + RANGE;
 
-  const logs = await client.getLogs({
-    address: ROUTER,
-    event: LIQUIDITY_ADDED_EVENT,
-    fromBlock: from,
-    toBlock:   to,
-  });
+  for (let iter = 0; iter < LP_ADD_MAX_ITERS; iter++) {
+    if (from >= head) break;
+    const to = from + LP_ADD_RANGE > head ? head : from + LP_ADD_RANGE;
 
-  for (const log of logs) {
-    const a = log.args;
-    if (!a?.user || !a.tokenA || !a.tokenB) continue;
-    const tA = a.tokenA.toLowerCase();
-    const tB = a.tokenB.toLowerCase();
-    // Only fDOGE/USDC pair qualifies for the LP task tiers.
-    const isFdogeUsdc = (tA === FDOGE && tB === USDC) || (tA === USDC && tB === FDOGE);
-    if (!isFdogeUsdc) continue;
-    const usdcAmount = tA === USDC ? (a.amountA ?? 0n) : (a.amountB ?? 0n);
-    addLpProvide(a.user, usdcAmount);
+    let logs;
+    try {
+      logs = await client.getLogs({
+        address: ROUTER,
+        event: LIQUIDITY_ADDED_EVENT,
+        fromBlock: from,
+        toBlock:   to,
+      });
+    } catch (e: unknown) {
+      console.error(`[community] lp-adds getLogs ${from}-${to} failed:`, (e as Error)?.message);
+      break;
+    }
+
+    let credited = 0;
+    for (const log of logs) {
+      const a = log.args;
+      if (!a?.user || !a.tokenA || !a.tokenB) continue;
+      const tA = a.tokenA.toLowerCase();
+      const tB = a.tokenB.toLowerCase();
+      const isFdogeUsdc = (tA === FDOGE && tB === USDC) || (tA === USDC && tB === FDOGE);
+      if (!isFdogeUsdc) continue;
+
+      // Idempotent: skip events we've already credited. Makes cursor resets
+      // safe — re-walking the same range cannot double-count.
+      const tx = log.transactionHash?.toLowerCase() ?? "";
+      const li = Number(log.logIndex ?? 0);
+      const ins = db.prepare(
+        `INSERT OR IGNORE INTO community_lp_adds_seen (tx, log_index) VALUES (?, ?)`
+      ).run(tx, li);
+      if (ins.changes === 0) continue;
+
+      const usdcAmount = tA === USDC ? (a.amountA ?? 0n) : (a.amountB ?? 0n);
+      addLpProvide(a.user, usdcAmount);
+      credited++;
+    }
+
+    setCursor("forge_router_lp_add", to);
+    if (credited > 0 || to === head) {
+      console.log(`[community] lp-adds ${from} → ${to} (${logs.length} logs, ${credited} fDOGE/USDC)${to === head ? " [caught up]" : ""}`);
+    }
+    from = to;
   }
-
-  setCursor("forge_router_lp_add", to);
-  if (logs.length > 0) console.log(`[community] lp-adds ${from} → ${to} (${logs.length} logs)`);
 }
 
 async function pollCommits(head: bigint) {
