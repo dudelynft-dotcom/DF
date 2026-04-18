@@ -1,16 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
-import { usePublicClient, useReadContracts } from "wagmi";
-import { formatUnits, parseAbiItem } from "viem";
+import { useReadContracts } from "wagmi";
+import { formatUnits } from "viem";
 import { addresses, tempo, PATHUSD_DECIMALS, DOGE_DECIMALS } from "@/config/chain";
 import { erc20Abi, minerAbi } from "@/lib/abis";
 
-const committedEvent = parseAbiItem(
-  "event Committed(address indexed user, uint256 indexed positionId, uint256 amount, uint8 mode, uint64 unlockAt)"
-);
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 export function LiveStats() {
-  const client = usePublicClient();
   const [miners, setMiners] = useState<number | null>(null);
 
   // Read USDC balance of every protocol contract to compute TVL.
@@ -57,35 +54,14 @@ export function LiveStats() {
     ? (miningTvl ?? 0n) + (lpTvl ?? 0n) : undefined;
 
   useEffect(() => {
-    if (!client) return;
-    const c = client;
+    if (!BACKEND) return;
     let cancelled = false;
     async function loadMiners() {
       try {
-        const head = await c.getBlockNumber();
-        const SCAN_DEPTH = 1_500_000n;
-        const RANGE      = 9_999n; // Arc RPC caps getLogs at 10k blocks
-        const fromBase   = head > SCAN_DEPTH ? head - SCAN_DEPTH : 0n;
-        const unique = new Set<string>();
-        for (let f = fromBase; f <= head; f += RANGE + 1n) {
-          if (cancelled) return;
-          const t = f + RANGE > head ? head : f + RANGE;
-          try {
-            const chunk = await c.getLogs({
-              address: addresses.miner,
-              event: committedEvent,
-              fromBlock: f,
-              toBlock: t,
-            });
-            for (const l of chunk) {
-              const u = l.args.user;
-              if (u) unique.add(u.toLowerCase());
-            }
-          } catch {
-            // skip rejected windows
-          }
-        }
-        if (!cancelled) setMiners(unique.size);
+        const r = await fetch(`${BACKEND}/stats/miners`, { cache: "no-store" });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json() as { activeMiners?: number; uniqueAllTime?: number };
+        if (!cancelled) setMiners(j.uniqueAllTime ?? j.activeMiners ?? 0);
       } catch {
         if (!cancelled) setMiners(null);
       }
@@ -93,7 +69,7 @@ export function LiveStats() {
     loadMiners();
     const t = setInterval(loadMiners, 60_000);
     return () => { cancelled = true; clearInterval(t); };
-  }, [client]);
+  }, []);
 
   return (
     <section>

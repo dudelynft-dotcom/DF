@@ -1,16 +1,12 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { useAccount, usePublicClient } from "wagmi";
+import { useAccount } from "wagmi";
 import { multicall } from "@wagmi/core";
-import { formatUnits, parseAbiItem } from "viem";
+import { formatUnits } from "viem";
 import { useConfig } from "wagmi";
 import { addresses, tempo, PATHUSD_DECIMALS } from "@/config/chain";
 import { minerAbi } from "@/lib/abis";
 import { namesAbi } from "@/lib/namesAbi";
-
-const committedEvent = parseAbiItem(
-  "event Committed(address indexed user, uint256 indexed positionId, uint256 amount, uint8 mode, uint64 unlockAt)"
-);
 
 type Row = {
   rank: number;
@@ -21,31 +17,15 @@ type Row = {
   positions: number;
 };
 
-type RawCommit = {
-  user: `0x${string}`;
-  amount: bigint;
-  blockNumber: bigint;
-};
-
 type Window = "24h" | "7d" | "all";
 
-// Arc block time ≈ 0.5-1s. Windows are approximate.
-// Arc RPC hard-limits getLogs to 10,000 blocks per call — chunk
-// size MUST stay at or below this.
-const BLOCKS_PER_DAY = 86_400n;
-const WINDOW_BLOCKS: Record<Window, bigint> = {
-  "24h": BLOCKS_PER_DAY,
-  "7d":  BLOCKS_PER_DAY * 7n,
-  "all": 1_500_000n, // ~17 days, covers full testnet history
-};
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 export default function LeaderboardPage() {
   const { address: me } = useAccount();
-  const client = usePublicClient();
   const config = useConfig();
 
-  const [raw, setRaw] = useState<RawCommit[] | null>(null);
-  const [head, setHead] = useState<bigint | null>(null);
+  const [miners, setMiners] = useState<Array<{ wallet: string; committed: bigint; positions: number }> | null>(null);
   const [nameByAddr, setNameByAddr] = useState<Record<string, string | null>>({});
   const [scoreByAddr, setScoreByAddr] = useState<Record<string, bigint>>({});
   const [error, setError] = useState<string | null>(null);
@@ -55,77 +35,57 @@ export default function LeaderboardPage() {
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    if (!client) return;
-    const c = client;
+    if (!BACKEND) {
+      setError("Leaderboard service is not configured. Check back soon.");
+      return;
+    }
     let cancelled = false;
 
     async function load() {
       try {
-        const headNow = await c.getBlockNumber();
-        const SCAN_DEPTH = WINDOW_BLOCKS[window];
-        const RANGE      = 9_999n; // Arc RPC hard-limits getLogs at 10,000 blocks
-        const fromBase   = headNow > SCAN_DEPTH ? headNow - SCAN_DEPTH : 0n;
-
-        type LogChunk = Awaited<ReturnType<typeof c.getLogs<typeof committedEvent>>>;
-        const logs: LogChunk = [];
-        for (let f = fromBase; f <= headNow; f += RANGE + 1n) {
-          if (cancelled) return;
-          const t = f + RANGE > headNow ? headNow : f + RANGE;
-          try {
-            const chunk = await c.getLogs({
-              address: addresses.miner,
-              event: committedEvent,
-              fromBlock: f,
-              toBlock: t,
-            });
-            logs.push(...chunk);
-          } catch { /* rare RPC rejection */ }
-        }
-
-        const commits: RawCommit[] = logs
-          .map((l) => {
-            const u = l.args.user as `0x${string}` | undefined;
-            const a = l.args.amount as bigint | undefined;
-            const b = l.blockNumber;
-            if (!u || a === undefined || b === null) return null;
-            return { user: u, amount: a, blockNumber: b } satisfies RawCommit;
-          })
-          .filter((x): x is RawCommit => x !== null);
-
+        const r = await fetch(`${BACKEND}/leaderboard?window=${window}`, { cache: "no-store" });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = await r.json() as {
+          miners: Array<{ wallet: string; committed: string; positions: number }>;
+          updatedAt: number;
+        };
         if (cancelled) return;
-        setRaw(commits);
-        setHead(headNow);
 
-        // Enrich addresses with on-chain data (independent of filter window).
-        const uniq = Array.from(new Set(commits.map((x) => x.user.toLowerCase()))) as `0x${string}`[];
-        if (uniq.length === 0) {
+        const parsed = j.miners.map((m) => ({
+          wallet: m.wallet,
+          committed: (() => { try { return BigInt(m.committed); } catch { return 0n; } })(),
+          positions: m.positions,
+        }));
+        setMiners(parsed);
+        setUpdatedAt(j.updatedAt * 1000);
+        setError(null);
+
+        if (parsed.length === 0) {
           setScoreByAddr({}); setNameByAddr({});
-          setUpdatedAt(Date.now()); setError(null);
           return;
         }
 
+        // Enrich with on-chain score + .fdoge name via a single multicall.
+        const uniq = parsed.map((m) => m.wallet as `0x${string}`);
         const calls = uniq.flatMap((a) => [
-          { address: addresses.miner, abi: minerAbi, functionName: "minerScore",   args: [a], chainId: tempo.id } as const,
+          { address: addresses.miner, abi: minerAbi, functionName: "minerScore",    args: [a], chainId: tempo.id } as const,
           { address: addresses.names, abi: namesAbi, functionName: "displayNameOf", args: [a], chainId: tempo.id } as const,
         ]);
         const res = await multicall(config, { contracts: calls, allowFailure: true });
+        if (cancelled) return;
 
-        const sMap: Record<string, bigint>       = {};
+        const sMap: Record<string, bigint>        = {};
         const nMap: Record<string, string | null> = {};
         uniq.forEach((a, i) => {
-          const s = (res[i * 2]?.result as bigint | undefined) ?? 0n;
+          const s = (res[i * 2]?.result     as bigint | undefined) ?? 0n;
           const n = (res[i * 2 + 1]?.result as string | undefined) ?? "";
           sMap[a.toLowerCase()] = s;
           nMap[a.toLowerCase()] = n && n.length > 0 ? n : null;
         });
-        if (cancelled) return;
         setScoreByAddr(sMap);
         setNameByAddr(nMap);
-        setUpdatedAt(Date.now());
-        setError(null);
       } catch (e: unknown) {
-        const msg = (e as { shortMessage?: string; message?: string })?.shortMessage
-                 ?? (e as { message?: string })?.message ?? String(e);
+        const msg = (e as { message?: string })?.message ?? String(e);
         if (!cancelled) setError(msg);
       }
     }
@@ -133,43 +93,31 @@ export default function LeaderboardPage() {
     load();
     const i = setInterval(load, 60_000);
     return () => { cancelled = true; clearInterval(i); };
-  }, [client, config]);
+  }, [window, config]);
 
-  // Filtering + ranking is reactive to the window toggle without refetch.
   const rows = useMemo<Row[] | null>(() => {
-    if (!raw || !head) return null;
-    const cutoff = window === "all" ? 0n : (head > WINDOW_BLOCKS[window] ? head - WINDOW_BLOCKS[window] : 0n);
+    if (!miners) return null;
 
-    const agg = new Map<string, { committed: bigint; positions: number }>();
-    for (const l of raw) {
-      if (l.blockNumber < cutoff) continue;
-      const key = l.user.toLowerCase();
-      const cur = agg.get(key) ?? { committed: 0n, positions: 0 };
-      cur.committed += l.amount;
-      cur.positions += 1;
-      agg.set(key, cur);
-    }
-
-    const list: Row[] = Array.from(agg.entries()).map(([key, ag]) => ({
+    const list: Row[] = miners.map((m) => ({
       rank: 0,
-      address: key as `0x${string}`,
-      name: nameByAddr[key] ?? null,
-      score: scoreByAddr[key] ?? 0n,
-      committed: ag.committed,
-      positions: ag.positions,
+      address: m.wallet as `0x${string}`,
+      name: nameByAddr[m.wallet] ?? null,
+      score: scoreByAddr[m.wallet] ?? 0n,
+      committed: m.committed,
+      positions: m.positions,
     }));
 
-    // Score is all-time cumulative; for windowed views, rank by committed in window.
-    list.sort((x, y) => {
-      if (window === "all") {
+    // For "all-time", rank primarily by on-chain miner score. Backend has
+    // already sorted by committed, which is the right order for 24h/7d.
+    if (window === "all") {
+      list.sort((x, y) => {
         if (y.score !== x.score) return y.score > x.score ? 1 : -1;
         return y.committed > x.committed ? 1 : -1;
-      }
-      return y.committed > x.committed ? 1 : -1;
-    });
+      });
+    }
     list.forEach((r, i) => { r.rank = i + 1; });
     return list;
-  }, [raw, head, window, nameByAddr, scoreByAddr]);
+  }, [miners, window, nameByAddr, scoreByAddr]);
 
   const q = query.trim().toLowerCase();
   const displayed = useMemo(() => {

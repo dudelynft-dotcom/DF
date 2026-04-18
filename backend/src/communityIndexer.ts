@@ -35,6 +35,9 @@ const USDC   = (process.env.USDC_ADDRESS          ?? "0x360000000000000000000000
 const POLL_MS = Number(process.env.COMMUNITY_POLL_MS ?? 12_000);
 const RANGE   = BigInt(process.env.COMMUNITY_RANGE   ?? 500); // blocks per poll
 const BACKFILL_BLOCKS = BigInt(process.env.COMMUNITY_BACKFILL ?? 50_000);
+// Raw commits backfill is larger because the public leaderboard needs
+// full testnet history, not just the recent volume-tracking window.
+const COMMITS_RAW_BACKFILL = BigInt(process.env.COMMUNITY_COMMITS_BACKFILL ?? 1_500_000);
 
 // ---- ABIs (just the events we read) ----
 const SWAP_EVENT      = parseAbiItem("event Swap(address indexed user, address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut, uint256 fee)");
@@ -134,6 +137,53 @@ async function pollSwaps(head: bigint) {
   console.log(`[community] swaps ${from} → ${to} (${logs.length} logs)`);
 }
 
+const insertCommit = db.prepare(
+  `INSERT OR IGNORE INTO miner_commits (tx, log_index, wallet, amount, block, timestamp)
+   VALUES (?, ?, ?, ?, ?, ?)`
+);
+
+// Raw Committed → miner_commits. Separate cursor from the volume poller so
+// the raw table can backfill deeper without double-counting mine_volume.
+async function pollCommitsRaw(head: bigint) {
+  const fallback = head > COMMITS_RAW_BACKFILL ? head - COMMITS_RAW_BACKFILL : 0n;
+  const from = getCursor("miner_commits_raw", fallback);
+  if (from >= head) return;
+  const to = from + RANGE > head ? head : from + RANGE;
+
+  const logs = await client.getLogs({
+    address: MINER,
+    event: COMMITTED_EVENT,
+    fromBlock: from,
+    toBlock:   to,
+  });
+
+  // Fetch block timestamps lazily, one per unique block in the batch.
+  const tsCache = new Map<bigint, number>();
+  for (const log of logs) {
+    const a = log.args;
+    if (!a?.user || a.amount == null || log.blockNumber == null) continue;
+    let ts = tsCache.get(log.blockNumber);
+    if (ts === undefined) {
+      try {
+        const b = await client.getBlock({ blockNumber: log.blockNumber });
+        ts = Number(b.timestamp);
+        tsCache.set(log.blockNumber, ts);
+      } catch { continue; }
+    }
+    insertCommit.run(
+      log.transactionHash?.toLowerCase() ?? "",
+      Number(log.logIndex ?? 0),
+      a.user.toLowerCase(),
+      a.amount.toString(),
+      Number(log.blockNumber),
+      ts
+    );
+  }
+
+  setCursor("miner_commits_raw", to);
+  if (logs.length > 0) console.log(`[community] commits-raw ${from} → ${to} (${logs.length} logs)`);
+}
+
 async function pollCommits(head: bigint) {
   const fallback = head > BACKFILL_BLOCKS ? head - BACKFILL_BLOCKS : 0n;
   const from = getCursor("miner_committed", fallback);
@@ -161,7 +211,7 @@ async function pollCommits(head: bigint) {
 async function tick() {
   try {
     const head = await client.getBlockNumber();
-    await Promise.all([pollSwaps(head), pollCommits(head)]);
+    await Promise.all([pollSwaps(head), pollCommits(head), pollCommitsRaw(head)]);
   } catch (e: unknown) {
     console.error("[community] tick error", (e as Error)?.message);
   }

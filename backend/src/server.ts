@@ -114,6 +114,74 @@ app.get("/prices/:pair", (req, res) => {
   });
 });
 
+/// GET /leaderboard?window=24h|7d|all&limit=500
+/// Aggregated per-wallet mining commits over the requested window.
+/// Replaces ~150 sequential getLogs calls the frontend used to run against
+/// Arc's 10k-block window cap on every page load.
+app.get("/leaderboard", (req, res) => {
+  const window = String(req.query.window ?? "all");
+  const limit  = Math.min(1000, Math.max(1, Number(req.query.limit ?? 500)));
+  const now    = Math.floor(Date.now() / 1000);
+  const cutoff =
+    window === "24h" ? now - 86_400 :
+    window === "7d"  ? now - 7 * 86_400 :
+                       0;
+
+  // Single pass in JS bigint space. SQLite SUM on TEXT bigints would
+  // coerce to REAL and drop precision past 2^53.
+  const rows = db.prepare(
+    `SELECT wallet, amount FROM miner_commits WHERE timestamp >= ?`
+  ).all(cutoff) as Array<{ wallet: string; amount: string }>;
+
+  const agg = new Map<string, { committed: bigint; positions: number }>();
+  for (const r of rows) {
+    let a: bigint;
+    try { a = BigInt(r.amount); } catch { continue; }
+    const cur = agg.get(r.wallet) ?? { committed: 0n, positions: 0 };
+    cur.committed += a;
+    cur.positions += 1;
+    agg.set(r.wallet, cur);
+  }
+
+  const miners = Array.from(agg.entries())
+    .map(([wallet, v]) => ({ wallet, committed: v.committed, positions: v.positions }))
+    .sort((x, y) => (y.committed > x.committed ? 1 : y.committed < x.committed ? -1 : 0))
+    .slice(0, limit)
+    .map((m) => ({ wallet: m.wallet, committed: m.committed.toString(), positions: m.positions }));
+
+  res.json({ window, updatedAt: now, miners });
+});
+
+/// GET /stats/miners?window=24h|7d|all
+/// Distinct-wallet count over the window. Feeds the "Active Miners" tile.
+app.get("/stats/miners", (req, res) => {
+  const window = String(req.query.window ?? "all");
+  const now    = Math.floor(Date.now() / 1000);
+  const cutoff =
+    window === "24h" ? now - 86_400 :
+    window === "7d"  ? now - 7 * 86_400 :
+                       0;
+
+  const row = db.prepare(
+    `SELECT COUNT(DISTINCT wallet) AS active_miners,
+            COUNT(*)               AS positions
+       FROM miner_commits
+      WHERE timestamp >= ?`
+  ).get(cutoff) as { active_miners: number; positions: number };
+
+  const uniqueAll = db.prepare(
+    `SELECT COUNT(DISTINCT wallet) AS n FROM miner_commits`
+  ).get() as { n: number };
+
+  res.json({
+    window,
+    updatedAt: now,
+    activeMiners:   row.active_miners,
+    positions:      row.positions,
+    uniqueAllTime:  uniqueAll.n,
+  });
+});
+
 /// POST /admin/verify  { address, verified }
 app.post("/admin/verify", (req, res) => {
   if (!requireAdmin(req, res)) return;

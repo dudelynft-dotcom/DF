@@ -154,9 +154,24 @@ CREATE TABLE IF NOT EXISTS community_mine_volume (
 -- Event cursors per (source, address). Independent from the existing
 -- indexer_cursor so the community indexer can run alongside.
 CREATE TABLE IF NOT EXISTS community_event_cursor (
-  source     TEXT PRIMARY KEY,        -- 'forge_router_swap' | 'miner_committed'
+  source     TEXT PRIMARY KEY,        -- 'forge_router_swap' | 'miner_committed' | 'miner_commits_raw'
   last_block INTEGER NOT NULL
 );
+
+-- Raw Committed events, one row per emitted log. Powers the public
+-- /leaderboard and /stats/miners endpoints so the frontend doesn't have
+-- to issue 150+ sequential getLogs against Arc's 10k-block window cap.
+CREATE TABLE IF NOT EXISTS miner_commits (
+  tx         TEXT NOT NULL,       -- 0x hash, lowercased
+  log_index  INTEGER NOT NULL,
+  wallet     TEXT NOT NULL,       -- lowercased 0x address
+  amount     TEXT NOT NULL,       -- bigint string (USDC 6-dec wei)
+  block      INTEGER NOT NULL,
+  timestamp  INTEGER NOT NULL,    -- unix seconds, from block header
+  PRIMARY KEY (tx, log_index)
+);
+CREATE INDEX IF NOT EXISTS idx_miner_commits_wallet ON miner_commits(wallet);
+CREATE INDEX IF NOT EXISTS idx_miner_commits_ts     ON miner_commits(timestamp DESC);
 `);
 
 // ------------------------------------------------------------------
