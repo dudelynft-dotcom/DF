@@ -65,6 +65,7 @@ export default function MinePage() {
       { ...usd,   functionName: "balanceOf",        args: [addresses.pair] },
       { ...pair,  functionName: "getReserves" },
       { ...pair,  functionName: "token0" },
+      { ...miner, functionName: "globalMultiplier" },
     ],
     allowFailure: true,
     query: { refetchInterval: 5000 },
@@ -84,6 +85,16 @@ export default function MinePage() {
   // landing page as part of LP TVL, not needed here.
   const reserves     = globals?.[11]?.result as readonly [bigint, bigint, number] | undefined;
   const token0       = globals?.[12]?.result as `0x${string}` | undefined;
+  const globalMult   = globals?.[13]?.result as bigint | undefined;
+
+  // Effective phase rate = raw phase rate × globalMultiplier (bps).
+  // Admin floats globalMultiplier inside [7500, 10000] bps according to
+  // volume + price conditions, so the displayed rate drifts within the
+  // [150, 200] fDOGE-per-USDC band. This matches what a miner actually
+  // earns on-chain (globalMultiplier is applied in Miner._harvestCore).
+  const effectivePhaseRate = (phase && globalMult !== undefined)
+    ? (phase[1] * globalMult) / 10_000n
+    : undefined;
 
   // fDOGE price in USDC (computed from pair reserves).
   const fdogePrice = useMemo(() => {
@@ -104,9 +115,11 @@ export default function MinePage() {
   ///   daily USD yield = daily fDOGE minted * fDOGE price
   ///   APR = daily yield * 365 * 100
   function aprForBoost(modeBps: number): number | null {
-    if (fdogePrice === null || !phase || convRate === undefined) return null;
-    const phaseRateHuman = Number(formatUnits(phase[1], DOGE_DECIMALS)); // fDOGE per 1 whole USDC
-    const dailyFlowFrac  = Number(convRate) / 10_000;                    // e.g. 0.02 for 2%/day
+    if (fdogePrice === null || effectivePhaseRate === undefined || convRate === undefined) return null;
+    // Use the effective (post-globalMultiplier) phase rate so projected
+    // APR tracks the market-adaptive rate users actually see in the tile.
+    const phaseRateHuman = Number(formatUnits(effectivePhaseRate, DOGE_DECIMALS));
+    const dailyFlowFrac  = Number(convRate) / 10_000;
     const boost          = modeBps / 10_000;
     const dailyfDOGE     = dailyFlowFrac * phaseRateHuman * boost;
     const dailyUSD       = dailyfDOGE * fdogePrice;
@@ -226,7 +239,7 @@ export default function MinePage() {
       <section className="grid grid-cols-2 md:grid-cols-4 gap-px bg-line rounded-xl overflow-hidden">
         <Stat label="Mining TVL"        value={miningTvl !== undefined ? `$${fmtUsd(miningTvl)}` : "-"} unit="Miner + LiquidityManager" emphasis />
         <Stat label="Current Phase"     value={phase ? toRoman(Number(phase[0]) + 1) : "-"} />
-        <Stat label="Phase Rate"        value={phase ? fmtDoge(phase[1]) : "-"} unit="fDOGE / USDC" />
+        <Stat label="Phase Rate"        value={effectivePhaseRate !== undefined ? fmtDoge(effectivePhaseRate) : "-"} unit="fDOGE / USDC · market-adaptive" />
         <Stat label="Conversion Rate"   value={convRate ? `${(Number(convRate) / 100).toFixed(2)}%` : "-"} unit="per day" />
       </section>
 

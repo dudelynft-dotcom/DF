@@ -269,6 +269,22 @@ pie showData
 
 Phase 2 absorbs the largest portion (38.1% of supply) at a moderate rate, balancing distribution depth with scarcity preservation. Phase 0 is the smallest (4.76%) but uses the highest rate to reward bootstrap participants disproportionately for taking risk before the system has on-chain liquidity.
 
+### 3.6 Market-Adaptive Published Rate
+
+The raw phase rate is a fixed ceiling (200 fDOGE per USDC in Phase 0). The **published rate** displayed on the Mine page is this value scaled by the global multiplier — a dial that floats inside the band `[7_500, 10_000]` bps, producing a published rate that drifts between **150 and 200 fDOGE per USDC**.
+
+The dial responds to market conditions: 24h fDOGE trading volume, recent price action, and aggregate mining activity. When the market is hot and fDOGE is strong, the dial trends lower, conserving emissions. When conditions soften, it trends higher to keep mining rewards attractive relative to effort. The band is closed on both ends — the published rate can never drop below 150 or rise above 200 inside a phase.
+
+```
+publishedRate = phaseRate × globalMultiplier / 10_000
+              ∈ [phaseRate × 0.75, phaseRate × 1.00]
+              = [150, 200] fDOGE per USDC during Phase 0
+```
+
+The same globalMultiplier is applied inside `Miner._harvestCore` during accrual, so what a wallet actually earns matches what the Mine tile shows — no hidden divergence between published and realised rate. Phase boundaries, the 210M supply cap, and all clamp bounds in Section 7 are unchanged; the adaptive layer modulates **only within the phase**.
+
+This mechanism makes the emission curve responsive to real usage rather than a staircase that ignores the state of the market, while preserving the hard supply guarantees baked into the contract.
+
 ---
 
 ## 4. Mining Mechanism
