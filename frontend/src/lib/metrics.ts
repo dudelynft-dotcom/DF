@@ -1,10 +1,14 @@
 "use client";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useReadContracts } from "wagmi";
 import { formatUnits } from "viem";
 import { addresses, tempo } from "@/config/chain";
 import { erc20Abi } from "@/lib/abis";
 import { pairAbi, forgeFactoryAbi } from "@/lib/dexAbis";
+
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+type PairVolume = { volumeUsd: number; priceChangePct: number | null };
 
 /// Token metrics shown in the trade grid. All USD values assume pathUSD is $1.
 export type TokenMetrics = {
@@ -87,6 +91,54 @@ export function useTokenMetrics(tokens: { address: `0x${string}`; decimals: numb
     allowFailure: true,
     query: { enabled: resolvedPairs.length > 0, refetchInterval: 10_000 },
   });
+
+  // --- 24h volume + price change, fetched from the backend ---
+  // Keyed by pair address (lowercased). The /stats/volume24h endpoint sums
+  // USDC-side amounts from the swaps table and computes pct from first/last
+  // price_num in the 24h window. 60s refresh matches the candle granularity.
+  const fdogeToken0 = pairData?.[1]?.result as `0x${string}` | undefined;
+  const [volumes, setVolumes] = useState<Record<string, PairVolume>>({});
+  const pairsKey = useMemo(() => {
+    const parts: string[] = [];
+    if (fdogeToken0) {
+      const side = fdogeToken0.toLowerCase() === addresses.pathUSD.toLowerCase() ? 0 : 1;
+      parts.push(`${addresses.pair.toLowerCase()}:${side}`);
+    }
+    resolvedPairs.forEach((p, i) => {
+      const t0 = projectPairData?.[i * 2 + 1]?.result as `0x${string}` | undefined;
+      if (!t0) return;
+      const side = t0.toLowerCase() === addresses.usdc.toLowerCase() ? 0 : 1;
+      parts.push(`${p.toLowerCase()}:${side}`);
+    });
+    return parts.join(",");
+  }, [fdogeToken0, resolvedPairs, projectPairData]);
+
+  useEffect(() => {
+    if (!BACKEND || !pairsKey) return;
+    let cancelled = false;
+
+    async function load() {
+      const pairs = pairsKey.split(",").filter(Boolean).map((s) => {
+        const [pair, side] = s.split(":");
+        return { pair, side };
+      });
+      const results = await Promise.all(pairs.map(async ({ pair, side }) => {
+        try {
+          const r = await fetch(`${BACKEND}/stats/volume24h?pair=${pair}&usdcSide=${side}`, { cache: "no-store" });
+          if (!r.ok) return null;
+          const j = await r.json() as { volumeUsd: number; priceChangePct: number | null };
+          return [pair, { volumeUsd: j.volumeUsd, priceChangePct: j.priceChangePct }] as const;
+        } catch { return null; }
+      }));
+      if (cancelled) return;
+      const next: Record<string, PairVolume> = {};
+      for (const r of results) if (r) next[r[0]] = r[1];
+      setVolumes(next);
+    }
+    load();
+    const t = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [pairsKey]);
 
   return useMemo(() => {
     // --- fDOGE price from its dedicated pair ---
@@ -174,6 +226,20 @@ export function useTokenMetrics(tokens: { address: `0x${string}`; decimals: numb
       const mc  = price !== null && circ !== null ? price * circ : null;
       const fdv = isTdoge ? (price !== null ? price * TDOGE_INITIAL_CAP : null) : mc;
 
+      // Resolve the pair address this token trades through, then look up
+      // 24h volume + price change from the backend fetch.
+      let pairAddrForToken: string | null = null;
+      if (isTdoge) pairAddrForToken = addresses.pair.toLowerCase();
+      else if (pp) {
+        // project token — find its pair via the factory-resolved list.
+        const projIdx = projectTokens.findIndex((pt) => pt.address.toLowerCase() === t.address.toLowerCase());
+        const resolved = projIdx >= 0 ? (pairAddrs?.[projIdx]?.result as `0x${string}` | undefined) : undefined;
+        if (resolved && resolved !== "0x0000000000000000000000000000000000000000") {
+          pairAddrForToken = resolved.toLowerCase();
+        }
+      }
+      const vol = pairAddrForToken ? volumes[pairAddrForToken] : undefined;
+
       out[t.address.toLowerCase()] = {
         priceUsd: price,
         marketCapUsd: mc,
@@ -181,12 +247,12 @@ export function useTokenMetrics(tokens: { address: `0x${string}`; decimals: numb
         liquidityUsd: liquidity,
         circulatingSupply: circ,
         totalSupply: totalHuman,
-        volume24hUsd: null,
-        priceChange24hPct: null,
+        volume24hUsd: vol?.volumeUsd ?? null,
+        priceChange24hPct: vol?.priceChangePct ?? null,
       };
     });
     return out;
-  }, [supplies, pairData, protocolFdoge, pairAddrs, projectPairData, tokens, projectTokens]);
+  }, [supplies, pairData, protocolFdoge, pairAddrs, projectPairData, tokens, projectTokens, volumes]);
 }
 
 export function fmtUsd(n: number | null): string {

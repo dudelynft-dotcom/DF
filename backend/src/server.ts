@@ -182,6 +182,61 @@ app.get("/stats/miners", (req, res) => {
   });
 });
 
+/// GET /stats/volume24h?pair=0x..&usdcSide=0|1
+/// 24-hour trading volume + price change for a single pair.
+/// usdcSide = which side of the pair is USDC (from the pair's token0
+/// ordering): "0" means token0 is USDC, "1" means token1 is USDC.
+/// Summed in JS bigint space to avoid SQLite REAL precision drift on
+/// 18-decimal token amounts.
+app.get("/stats/volume24h", (req, res) => {
+  const pair = String(req.query.pair ?? "").toLowerCase();
+  const side = String(req.query.usdcSide ?? "");
+  if (!/^0x[a-f0-9]{40}$/.test(pair)) return res.status(400).json({ error: "bad_pair" });
+  if (side !== "0" && side !== "1")   return res.status(400).json({ error: "bad_side" });
+
+  const now    = Math.floor(Date.now() / 1000);
+  const cutoff = now - 86_400;
+
+  const rows = db.prepare(
+    `SELECT amount0_in, amount0_out, amount1_in, amount1_out
+       FROM swaps WHERE pair = ? AND timestamp >= ?`
+  ).all(pair, cutoff) as Array<{ amount0_in: string; amount0_out: string; amount1_in: string; amount1_out: string }>;
+
+  let volWei = 0n;
+  for (const r of rows) {
+    try {
+      if (side === "0") volWei += BigInt(r.amount0_in) + BigInt(r.amount0_out);
+      else              volWei += BigInt(r.amount1_in) + BigInt(r.amount1_out);
+    } catch { /* skip malformed rows */ }
+  }
+
+  // Price change: first vs last price_num in the window.
+  const first = db.prepare(
+    `SELECT price_num FROM swaps WHERE pair = ? AND timestamp >= ?
+     ORDER BY timestamp ASC, log_index ASC LIMIT 1`
+  ).get(pair, cutoff) as { price_num: number } | undefined;
+  const last = db.prepare(
+    `SELECT price_num FROM swaps WHERE pair = ? AND timestamp >= ?
+     ORDER BY timestamp DESC, log_index DESC LIMIT 1`
+  ).get(pair, cutoff) as { price_num: number } | undefined;
+
+  const priceChangePct = (first && last && first.price_num > 0)
+    ? ((last.price_num - first.price_num) / first.price_num) * 100
+    : null;
+
+  // USDC is 6 decimals; divide to return a plain USD number.
+  const volumeUsd = Number(volWei) / 1_000_000;
+
+  res.json({
+    pair,
+    usdcSide: Number(side),
+    volumeUsd,
+    priceChangePct,
+    swapCount: rows.length,
+    updatedAt: now,
+  });
+});
+
 /// POST /admin/verify  { address, verified }
 app.post("/admin/verify", (req, res) => {
   if (!requireAdmin(req, res)) return;
