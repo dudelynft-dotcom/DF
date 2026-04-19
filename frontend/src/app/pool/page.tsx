@@ -3,7 +3,9 @@ import { useState } from "react";
 import {
   useAccount, useWriteContract,
   useReadContract, useReadContracts,
+  usePublicClient,
 } from "wagmi";
+import type { PublicClient } from "viem";
 import { formatUnits, parseUnits, maxUint256, type Address } from "viem";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { arc, addresses, USDC_DECIMALS, DOGE_DECIMALS } from "@/config/chain";
@@ -77,6 +79,20 @@ const ROUTER = addresses.forgeRouter;
 const FACTORY = addresses.factory;
 const ZERO = 0n;
 const SLIPPAGE_BPS = 100n; // 1%
+
+// Derive the deadline from chain time, not the user's clock. A skewed
+// local clock (even a few minutes off) makes the router revert with
+// ExpiredDeadline() on every call. RPC failure falls back to local
+// time — slippage still protects price.
+async function computeDeadline(pc: PublicClient | undefined): Promise<bigint> {
+  try {
+    if (pc) {
+      const b = await pc.getBlock();
+      return b.timestamp + 1200n;
+    }
+  } catch { /* fall through */ }
+  return BigInt(Math.floor(Date.now() / 1000) + 1200);
+}
 
 // ============================================================
 //                         PAGE
@@ -249,6 +265,7 @@ function AddLiquidity({
   isConnected: boolean; address: Address | undefined;
   refetch: () => void;
 }) {
+  const publicClient = usePublicClient();
   const [amtA, setAmtA] = useState("");
   const [amtB, setAmtB] = useState("");
   const [err, setErr]   = useState<string | null>(null);
@@ -300,7 +317,7 @@ function AddLiquidity({
     setErr(null);
     const minA = parsedA - (parsedA * SLIPPAGE_BPS) / 10000n;
     const minB = parsedB - (parsedB * SLIPPAGE_BPS) / 10000n;
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+    const deadline = await computeDeadline(publicClient);
     try {
       await writeContractAsync({
         address: ROUTER, abi: forgeRouterAbi, functionName: "addLiquidity",
@@ -385,6 +402,7 @@ function RemoveLiquidity({
   isConnected: boolean; address: Address | undefined;
   refetch: () => void;
 }) {
+  const publicClient = usePublicClient();
   const [pct, setPct] = useState(50);
   const [err, setErr] = useState<string | null>(null);
 
@@ -412,7 +430,7 @@ function RemoveLiquidity({
     setErr(null);
     const minA = estA - (estA * SLIPPAGE_BPS) / 10000n;
     const minB = estB - (estB * SLIPPAGE_BPS) / 10000n;
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+    const deadline = await computeDeadline(publicClient);
     try {
       await writeContractAsync({
         address: ROUTER, abi: forgeRouterAbi, functionName: "removeLiquidity",

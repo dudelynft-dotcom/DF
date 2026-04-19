@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { useAccount, useConfig, useReadContract } from "wagmi";
+import { useAccount, useConfig, usePublicClient, useReadContract } from "wagmi";
 import { waitForTransactionReceipt } from "@wagmi/core";
 import { formatUnits, parseUnits } from "viem";
 import { addresses, tempo } from "@/config/chain";
@@ -35,6 +35,7 @@ export function SwapForm({
 }) {
   const { address } = useAccount();
   const config = useConfig();
+  const publicClient = usePublicClient();
   const toast = useToast();
 
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -116,13 +117,24 @@ export function SwapForm({
     }
   }
 
-  function onSwap() {
+  // Derive the deadline from the chain's block.timestamp instead of
+  // the user's clock. A skewed local clock (even by a few minutes) can
+  // ship a deadline already in the past, making the router revert with
+  // ExpiredDeadline() every time. Falls back to local time only if the
+  // RPC is unreachable — slippage still protects price.
+  async function computeDeadline(): Promise<bigint> {
+    try {
+      if (publicClient) {
+        const b = await publicClient.getBlock();
+        return b.timestamp + 1200n;
+      }
+    } catch { /* fall through */ }
+    return BigInt(Math.floor(Date.now() / 1000) + 1200);
+  }
+
+  async function onSwap() {
     if (!address || !parsedIn || !routeAvailable) return;
-    // 20-minute deadline. Short deadlines revert as ExpiredDeadline() when
-    // the wallet/user stalls, the mempool delays inclusion, or the user's
-    // clock is slightly behind the chain. Slippage still protects price;
-    // the deadline is about liveness, not safety.
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + 1200);
+    const deadline = await computeDeadline();
     doTx("swap",
       { address: addresses.forgeRouter, abi: forgeRouterAbi, functionName: "swapExactTokensForTokens",
         args: [parsedIn, minOut, [from.address, to.address] as const, address, deadline] },
