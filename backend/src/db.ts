@@ -214,6 +214,11 @@ const SEED = [
   { slug: "retweet-launch",  kind: "social", title: "Retweet the launch post",     description: "Retweet our pinned launch announcement.", points: 75,  max: 1, payload: '{}',                        sort: 12 },
   { slug: "comment-launch",  kind: "social", title: "Comment on the launch post",  description: "Drop a comment on the pinned launch tweet. Show some love.", points: 50, max: 1, payload: '{"trustBased":true,"url":"https://x.com/DogeForgeFun/status/2044712933339390057"}', sort: 13 },
   { slug: "quote-launch",    kind: "social", title: "Quote tweet with your thoughts", description: "Quote tweet the launch post and share what excites you about DOGE FORGE.", points: 100, max: 1, payload: '{"trustBased":true,"url":"https://x.com/DogeForgeFun/status/2044712933339390057"}', sort: 14 },
+
+  // --- Bundled tweet engagement (like + comment + retweet) ---
+  { slug: "engage-tweet-1", kind: "social", title: "Like, comment & RT (post #1)", description: "Like, reply, and retweet this post on X. One claim.", points: 150, max: 1, payload: '{"trustBased":true,"url":"https://x.com/i/status/2045442635272229323"}', sort: 16 },
+  { slug: "engage-tweet-2", kind: "social", title: "Like, comment & RT (post #2)", description: "Like, reply, and retweet this post on X. One claim.", points: 150, max: 1, payload: '{"trustBased":true,"url":"https://x.com/i/status/2045074304149115050"}', sort: 17 },
+  { slug: "engage-tweet-3", kind: "social", title: "Like, comment & RT (post #3)", description: "Like, reply, and retweet this post on X. One claim.", points: 150, max: 1, payload: '{"trustBased":true,"url":"https://x.com/i/status/2045717146215354790"}', sort: 18 },
   { slug: "join-tg-channel", kind: "social", title: "Join the official Telegram channel", description: "Announcements channel. Link your Telegram first; we verify membership on-chain via bot.", points: 100, max: 1, payload: '{"chat":"@DogeForgeAnn","url":"https://t.me/DogeForgeAnn"}', sort: 15 },
   { slug: "join-tg-group",   kind: "social", title: "Join the Telegram community",        description: "Community chat. Link Telegram first; verified via bot, no self-attest.",                points: 75,  max: 1, payload: '{"chat":"@dogeforge","url":"https://t.me/dogeforge"}',    sort: 14 },
 
